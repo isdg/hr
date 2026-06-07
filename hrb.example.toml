@@ -1,0 +1,23 @@
+# Example hrb config. `hrb init` will drop a copy of this into your vault as hrb.toml.
+
+[[feeds]]
+url  = "https://dropbox.tech/feed"
+name = "dropbox-tech"
+tags = ["tech"]
+
+[[feeds]]
+url  = "https://snyk.io/blog/feed"
+name = "snyk"
+tags = ["security"]
+
+# Mark items read automatically when their file is opened (requires nvim autocmd).
+autoread = false
+
+# Show already-read items in `hrb list` by default.
+showread = false
+
+# Sort order for `hrb list` / `hrb feed`. "desc" = newest first.
+ordering = "desc"
+
+# User-Agent for HTTP requests.
+user_agent = "hrb/0.1"
