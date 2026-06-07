@@ -11,6 +11,7 @@ var syncCmd = &cobra.Command{
 }
 
 func init() {
-	syncCmd.Flags().StringVar(&syncFeedFilter, "feed", "", "sync only this feed name")
+	syncCmd.Flags().StringVar(&syncFeedFilter, "feed", "",
+		"sync only this feed name")
 	rootCmd.AddCommand(syncCmd)
 }

@@ -25,7 +25,8 @@ func init() {
 	listCmd.Flags().BoolVar(&listUnread, "unread", false, "only unread items")
 	listCmd.Flags().StringVar(&listFeed, "feed", "", "filter to a single feed")
 	listCmd.Flags().StringVar(&listTag, "tag", "", "filter by tag")
-	listCmd.Flags().StringVar(&listSince, "since", "", "only items newer than (e.g. 7d, 24h)")
+	listCmd.Flags().StringVar(&listSince, "since", "",
+		"only items newer than (e.g. 7d, 24h)")
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(feedCmd)
 }
