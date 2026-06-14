@@ -48,6 +48,86 @@ func Save(articlePath string, m *Meta) error {
 	return nil
 }
 
+// LoadOrDefault returns the sidecar at articlePath, or a zero-value
+// Meta if it's missing or malformed.
+func LoadOrDefault(articlePath string) *Meta {
+	if m, err := Load(articlePath); err == nil {
+		return m
+	}
+	return &Meta{}
+}
+
+// loadForUpdate returns the existing sidecar, or a default Meta if the
+// sidecar is missing. Parse errors are surfaced (so we don't silently
+// overwrite valid state with defaults).
+func loadForUpdate(articlePath string) (*Meta, error) {
+	m, err := Load(articlePath)
+	if err == nil {
+		return m, nil
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return &Meta{}, nil
+	}
+	return nil, err
+}
+
+func ensureArticle(articlePath string) error {
+	info, err := os.Stat(articlePath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("article not found: %s", articlePath)
+		}
+		return err
+	}
+	if info.IsDir() {
+		return fmt.Errorf("not a file: %s", articlePath)
+	}
+	if !strings.HasSuffix(articlePath, ".md") {
+		return fmt.Errorf("not a .md article: %s", articlePath)
+	}
+	return nil
+}
+
+func MarkRead(articlePath string) error {
+	if err := ensureArticle(articlePath); err != nil {
+		return err
+	}
+	m, err := loadForUpdate(articlePath)
+	if err != nil {
+		return err
+	}
+	m.Read = true
+	now := time.Now().UTC()
+	m.ReadAt = &now
+	return Save(articlePath, m)
+}
+
+func MarkUnread(articlePath string) error {
+	if err := ensureArticle(articlePath); err != nil {
+		return err
+	}
+	m, err := loadForUpdate(articlePath)
+	if err != nil {
+		return err
+	}
+	m.Read = false
+	m.ReadAt = nil
+	return Save(articlePath, m)
+}
+
+// ToggleFavorite flips the favorite bit and returns the new value.
+func ToggleFavorite(articlePath string) (bool, error) {
+	if err := ensureArticle(articlePath); err != nil {
+		return false, err
+	}
+	m, err := loadForUpdate(articlePath)
+	if err != nil {
+		return false, err
+	}
+	m.Favorite = !m.Favorite
+	return m.Favorite, Save(articlePath, m)
+}
+
 func WriteIfAbsent(articlePath string) (bool, error) {
 	_, err := os.Stat(Path(articlePath))
 	if err == nil {

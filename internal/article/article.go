@@ -1,8 +1,9 @@
-// Package article writes frontmatter+body markdown files for fetched
+// Package article writes Frontmatter+body markdown files for fetched
 // items.
 package article
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
@@ -86,7 +87,7 @@ func Write(feedsDir string, a *Article) (bool, string, error) {
 	return true, path, nil
 }
 
-type frontmatter struct {
+type Frontmatter struct {
 	Title     string `yaml:"title"`
 	URL       string `yaml:"url"`
 	Published string `yaml:"published"`
@@ -94,8 +95,29 @@ type frontmatter struct {
 	GUID      string `yaml:"guid,omitempty"`
 }
 
+// ParseFile reads a written article and returns its frontmatter.
+func ParseFile(path string) (*Frontmatter, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	sep := []byte("---\n")
+	if !bytes.HasPrefix(data, sep) {
+		return nil, fmt.Errorf("no frontmatter in %s", path)
+	}
+	body, _, ok := bytes.Cut(data[len(sep):], []byte("\n---\n"))
+	if !ok {
+		return nil, fmt.Errorf("unterminated frontmatter in %s", path)
+	}
+	var fm Frontmatter
+	if err := yaml.Unmarshal(body, &fm); err != nil {
+		return nil, fmt.Errorf("parse frontmatter %s: %w", path, err)
+	}
+	return &fm, nil
+}
+
 func render(a *Article) ([]byte, error) {
-	fm := frontmatter{
+	fm := Frontmatter{
 		Title:     a.Title,
 		URL:       a.URL,
 		Published: a.Published.Format(time.RFC3339),
@@ -104,7 +126,7 @@ func render(a *Article) ([]byte, error) {
 	}
 	fmData, err := yaml.Marshal(fm)
 	if err != nil {
-		return nil, fmt.Errorf("marshal frontmatter: %w", err)
+		return nil, fmt.Errorf("marshal Frontmatter: %w", err)
 	}
 
 	body := cleanBody(a.Body, a.Title)
