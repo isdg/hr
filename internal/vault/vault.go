@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/isg/hrb/internal/rc"
 )
 
 //go:embed default.toml
@@ -17,18 +19,43 @@ type Vault struct {
 	Root string
 }
 
-// Resolve returns the absolute vault root from (in priority order):
-// the passed-in path, $HRB_VAULT, or the default ~/blogs. The returned
-// path is not guaranteed to exist.
-func Resolve(path string) (string, error) {
-	raw := path
+// Resolve returns the absolute root of the active vault for operating
+// commands. Priority: explicit (flag) > $HRB_VAULT > ~/.hrbrc.
+func Resolve(explicit string) (string, error) {
+	raw := explicit
 	if raw == "" {
 		raw = os.Getenv("HRB_VAULT")
 	}
 	if raw == "" {
-		raw = "~/blogs"
+		r, err := rc.Load()
+		if err != nil {
+			return "", err
+		}
+		raw = r.Vault
 	}
-	expanded, err := expandTilde(raw)
+	if raw == "" {
+		return "", fmt.Errorf(
+			"no vault configured (run `hrb init <name>`)")
+	}
+	return absExpand(raw)
+}
+
+// ResolveNew returns the absolute path for a vault about to be
+// created. Priority: explicit > $HRB_VAULT > ~/blogs/<name>. Never
+// reads ~/.hrbrc.
+func ResolveNew(explicit, name string) (string, error) {
+	raw := explicit
+	if raw == "" {
+		raw = os.Getenv("HRB_VAULT")
+	}
+	if raw == "" {
+		raw = "~/blogs/" + name
+	}
+	return absExpand(raw)
+}
+
+func absExpand(p string) (string, error) {
+	expanded, err := expandTilde(p)
 	if err != nil {
 		return "", err
 	}
@@ -61,11 +88,12 @@ func Open(root string) (*Vault, error) {
 	return v, nil
 }
 
-func Init(root string) (*Vault, error) {
+func Init(root, name string) (*Vault, error) {
 	v := &Vault{Root: root}
 
 	if _, err := os.Stat(v.ConfigPath()); err == nil {
-		return nil, fmt.Errorf("vault already initialized at %s", root)
+		return nil, fmt.Errorf(
+			"vault already initialized at %s", root)
 	}
 
 	dirs := []string{v.Root, v.FeedsDir(), v.MetaDir(), v.LogDir()}
@@ -75,7 +103,7 @@ func Init(root string) (*Vault, error) {
 		}
 	}
 
-	err := os.WriteFile(v.ConfigPath(), defaultConfig, 0o644)
+	err := os.WriteFile(v.ConfigPath(), buildConfig(name), 0o644)
 	if err != nil {
 		return nil, fmt.Errorf("write config: %w", err)
 	}
@@ -86,7 +114,16 @@ func Init(root string) (*Vault, error) {
 		return nil, fmt.Errorf("write .gitignore: %w", err)
 	}
 
+	if err := rc.Save(&rc.RC{Vault: v.Root}); err != nil {
+		return nil, fmt.Errorf("write hrbrc: %w", err)
+	}
+
 	return v, nil
+}
+
+func buildConfig(name string) []byte {
+	header := fmt.Sprintf("name = %q\n\n", name)
+	return append([]byte(header), defaultConfig...)
 }
 
 func (v *Vault) ConfigPath() string {

@@ -9,6 +9,7 @@ import (
 )
 
 type Config struct {
+	Name      string `toml:"name"`
 	Feeds     []Feed `toml:"feeds"`
 	AutoRead  bool   `toml:"autoread"`
 	ShowRead  bool   `toml:"showread"`
