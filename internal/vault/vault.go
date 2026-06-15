@@ -145,3 +145,15 @@ func (v *Vault) CachePath() string {
 func (v *Vault) LogDir() string {
 	return filepath.Join(v.MetaDir(), "log")
 }
+
+func (v *Vault) RawDir() string {
+	return filepath.Join(v.MetaDir(), "raw")
+}
+
+// RawPath returns the archive location for an article's original HTML,
+// mirroring the feeds/ layout: <vault>/.hr/raw/<feed>/<base>.html where
+// <base> is the article filename minus its .md suffix.
+func (v *Vault) RawPath(feedName, articleFilename string) string {
+	base := strings.TrimSuffix(articleFilename, ".md")
+	return filepath.Join(v.RawDir(), feedName, base+".html")
+}

@@ -4,6 +4,7 @@ package syncer
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -126,6 +127,9 @@ func syncFeed(
 			fr.Err = err
 			return fr
 		}
+		if err := writeRawHTML(opts.Vault, item, a); err != nil {
+			elog.Write(tag+":raw", err)
+		}
 	}
 
 	c.Set(f.Name, cache.Entry{
@@ -134,6 +138,30 @@ func syncFeed(
 		FetchedAt:    time.Now().UTC(),
 	})
 	return fr
+}
+
+// writeRawHTML stashes the original feed body HTML at
+// <vault>/.hr/raw/<id>.html the first time we see an item. Idempotent
+// (skips if the file already exists). Cheap insurance against future
+// HTML→markdown conversion bugs.
+func writeRawHTML(
+	v *vault.Vault, item *gofeed.Item, a *article.Article,
+) error {
+	html := item.Content
+	if html == "" {
+		html = item.Description
+	}
+	if html == "" {
+		return nil
+	}
+	rawPath := v.RawPath(a.FeedName, a.Filename())
+	if _, err := os.Stat(rawPath); err == nil {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(rawPath), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(rawPath, []byte(html), 0o644)
 }
 
 func itemToArticle(
