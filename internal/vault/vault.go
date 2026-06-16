@@ -142,6 +142,13 @@ func (v *Vault) CachePath() string {
 	return filepath.Join(v.MetaDir(), "cache.json")
 }
 
+// IndexPath is the listing cache: a single file mirroring every
+// article's parsed frontmatter + meta so `hr list`/`feed` can skip
+// re-parsing unchanged files. Rebuilt lazily; safe to delete.
+func (v *Vault) IndexPath() string {
+	return filepath.Join(v.MetaDir(), "index.json")
+}
+
 func (v *Vault) LogDir() string {
 	return filepath.Join(v.MetaDir(), "log")
 }

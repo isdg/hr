@@ -4,8 +4,6 @@ package listing
 
 import (
 	"fmt"
-	"io/fs"
-	"path/filepath"
 	"slices"
 	"sort"
 	"strconv"
@@ -47,29 +45,17 @@ type Filter struct {
 }
 
 func List(v *vault.Vault, f Filter) ([]Item, error) {
-	feedsDir := v.FeedsDir()
-	now := time.Now()
-	items := make([]Item, 0)
-
-	walk := func(path string, d fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if d.IsDir() || !strings.HasSuffix(path, ".md") {
-			return nil
-		}
-		it, err := loadItem(path)
-		if err != nil {
-			return nil
-		}
-		if !f.match(it, now) {
-			return nil
-		}
-		items = append(items, it)
-		return nil
-	}
-	if err := filepath.WalkDir(feedsDir, walk); err != nil {
+	all, err := loadAll(v)
+	if err != nil {
 		return nil, err
+	}
+
+	now := time.Now()
+	items := make([]Item, 0, len(all))
+	for _, it := range all {
+		if f.match(it, now) {
+			items = append(items, it)
+		}
 	}
 
 	sort.Slice(items, func(i, j int) bool {
