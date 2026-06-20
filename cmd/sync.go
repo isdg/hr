@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -37,17 +38,39 @@ var syncCmd = &cobra.Command{
 		}
 
 		res, err := syncer.Run(cmd.Context(), syncer.Options{
-			Vault:     v,
-			Config:    cfg,
-			FeedName:  syncFeedFilter,
-			UserAgent: ua,
-			Force:     syncForce,
+			Vault:       v,
+			Config:      cfg,
+			FeedName:    syncFeedFilter,
+			UserAgent:   ua,
+			Force:       syncForce,
+			OnFeedStart: logFeedStart,
+			OnFeedDone:  logFeedDone,
 		})
 		if res != nil {
 			printSyncSummary(res)
 		}
 		return err
 	},
+}
+
+// logFeedStart/logFeedDone print live sync progress to stderr, leaving
+// stdout for the final machine-readable summary.
+func logFeedStart(i, total int, name string) {
+	fmt.Fprintf(os.Stderr, "[%d/%d] syncing %s…\n", i, total, name)
+}
+
+func logFeedDone(i, total int, fr syncer.FeedResult) {
+	switch {
+	case fr.Err != nil:
+		fmt.Fprintf(os.Stderr, "[%d/%d] %s: error: %v\n",
+			i, total, fr.Name, fr.Err)
+	case fr.NotModified:
+		fmt.Fprintf(os.Stderr, "[%d/%d] %s: not modified\n",
+			i, total, fr.Name)
+	default:
+		fmt.Fprintf(os.Stderr, "[%d/%d] %s: %d new, %d existing\n",
+			i, total, fr.Name, fr.New, fr.Existing)
+	}
 }
 
 func printSyncSummary(r *syncer.Result) {

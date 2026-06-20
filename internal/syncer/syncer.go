@@ -26,6 +26,12 @@ type Options struct {
 	FeedName  string // empty = all feeds
 	UserAgent string
 	Force     bool // ignore cache; refetch even if not modified
+
+	// OnFeedStart/OnFeedDone, if set, are called around each feed so
+	// callers can show live progress. i is 1-based; total is the feed
+	// count. Both run on Run's goroutine (no concurrency to guard).
+	OnFeedStart func(i, total int, name string)
+	OnFeedDone  func(i, total int, fr FeedResult)
 }
 
 type FeedResult struct {
@@ -57,8 +63,15 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 
 	conv := md.NewConverter("", true, nil)
 	result := &Result{Feeds: make([]FeedResult, 0, len(feeds))}
-	for _, f := range feeds {
+	total := len(feeds)
+	for i, f := range feeds {
+		if opts.OnFeedStart != nil {
+			opts.OnFeedStart(i+1, total, f.Name)
+		}
 		fr := syncFeed(ctx, opts, f, c, conv, elog)
+		if opts.OnFeedDone != nil {
+			opts.OnFeedDone(i+1, total, fr)
+		}
 		result.Feeds = append(result.Feeds, fr)
 	}
 
