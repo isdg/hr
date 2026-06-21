@@ -70,7 +70,7 @@ func loadItem(path string) (Item, error) {
 		return Item{}, err
 	}
 	m := meta.LoadOrDefault(path)
-	pub, _ := time.Parse(time.RFC3339, fm.Published)
+	pub := parsePublished(fm.Published)
 	return Item{
 		Path:      path,
 		Title:     textfmt.Line(fm.Title),
@@ -83,6 +83,26 @@ func loadItem(path string) (Item, error) {
 		Favorite:  m.Favorite,
 		Tags:      m.Tags,
 	}, nil
+}
+
+// parsePublished parses an RFC3339 timestamp, tolerating the signed
+// negative years (e.g. "-0350-07-03T00:00:00Z") that hr writes for
+// BC-dated articles but that Go's RFC3339 layout refuses to parse back.
+// Returns the zero time if the value is unparseable.
+func parsePublished(s string) time.Time {
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t
+	}
+	rest, ok := strings.CutPrefix(s, "-")
+	if !ok {
+		return time.Time{}
+	}
+	t, err := time.Parse(time.RFC3339, rest)
+	if err != nil {
+		return time.Time{}
+	}
+	return time.Date(-t.Year(), t.Month(), t.Day(),
+		t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), t.Location())
 }
 
 func (f Filter) match(it Item, now time.Time) bool {

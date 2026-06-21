@@ -13,7 +13,7 @@ import (
 
 // indexVersion bumps whenever the cached Item shape changes, forcing a
 // full rebuild on the next list.
-const indexVersion = 1
+const indexVersion = 2
 
 type indexEntry struct {
 	MDMod   int64 `json:"md"`   // .md mod time, UnixNano
