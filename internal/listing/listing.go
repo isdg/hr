@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/isg9/hr/internal/article"
-	"github.com/isg9/hr/internal/meta"
-	"github.com/isg9/hr/internal/textfmt"
-	"github.com/isg9/hr/internal/vault"
+	"github.com/isdg/hr/internal/article"
+	"github.com/isdg/hr/internal/meta"
+	"github.com/isdg/hr/internal/textfmt"
+	"github.com/isdg/hr/internal/vault"
 )
 
 type Item struct {

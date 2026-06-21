@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/isg9/hr/internal/meta"
-	"github.com/isg9/hr/internal/vault"
+	"github.com/isdg/hr/internal/meta"
+	"github.com/isdg/hr/internal/vault"
 )
 
 // indexVersion bumps whenever the cached Item shape changes, forcing a

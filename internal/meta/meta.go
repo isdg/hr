@@ -10,7 +10,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
-	"github.com/isg9/hr/internal/textfmt"
+	"github.com/isdg/hr/internal/textfmt"
 )
 
 type Meta struct {

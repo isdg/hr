@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/isg9/hr/internal/meta"
+	"github.com/isdg/hr/internal/meta"
 )
 
 var readCmd = &cobra.Command{

@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/isg9/hr/internal/article"
-	"github.com/isg9/hr/internal/meta"
+	"github.com/isdg/hr/internal/article"
+	"github.com/isdg/hr/internal/meta"
 )
 
 var fmtCmd = &cobra.Command{

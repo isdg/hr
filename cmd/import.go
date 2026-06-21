@@ -12,11 +12,11 @@ import (
 	"github.com/spf13/cobra"
 	_ "modernc.org/sqlite"
 
-	"github.com/isg9/hr/internal/article"
-	"github.com/isg9/hr/internal/config"
-	"github.com/isg9/hr/internal/errlog"
-	"github.com/isg9/hr/internal/meta"
-	"github.com/isg9/hr/internal/vault"
+	"github.com/isdg/hr/internal/article"
+	"github.com/isdg/hr/internal/config"
+	"github.com/isdg/hr/internal/errlog"
+	"github.com/isdg/hr/internal/meta"
+	"github.com/isdg/hr/internal/vault"
 )
 
 var importNomCmd = &cobra.Command{

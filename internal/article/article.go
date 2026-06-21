@@ -16,7 +16,7 @@ import (
 	"github.com/Kunde21/markdownfmt/v3"
 	"gopkg.in/yaml.v3"
 
-	"github.com/isg9/hr/internal/textfmt"
+	"github.com/isdg/hr/internal/textfmt"
 )
 
 type Article struct {
