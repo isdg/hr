@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -19,6 +21,7 @@ var (
 	corruptID      string
 	corruptAll     bool
 	corruptJSON    bool
+	corruptForce   bool
 )
 
 var corruptCmd = &cobra.Command{
@@ -84,6 +87,37 @@ var corruptRmCmd = &cobra.Command{
 			return fmt.Errorf("no corruption with id %q", corruptID)
 		}
 		fmt.Printf("removed %s\n", corruptID)
+		return nil
+	},
+}
+
+var corruptRestoreCmd = &cobra.Command{
+	Use:   "restore <article.md> --id <id>",
+	Short: "Replace a marked region with text from stdin, then clear the mark",
+	Long: `Replace the region of a corruption mark with replacement text read
+from stdin, then remove the mark.
+
+By default it refuses if the article text at the recorded range no
+longer matches the stored quote (drift); pass --force to override.
+
+  echo "the corrected passage" | hr corrupt restore <article.md> --id a1b2c3d4`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if corruptID == "" {
+			return fmt.Errorf("--id is required")
+		}
+		repl, err := io.ReadAll(cmd.InOrStdin())
+		if err != nil {
+			return err
+		}
+		err = corrupt.Restore(args[0], corruptID, string(repl), corruptForce)
+		if errors.Is(err, corrupt.ErrDrift) {
+			return fmt.Errorf("%w; re-check the mark or pass --force", err)
+		}
+		if err != nil {
+			return err
+		}
+		fmt.Printf("restored %s\n", corruptID)
 		return nil
 	},
 }
@@ -180,7 +214,13 @@ func init() {
 	corruptRmCmd.Flags().StringVar(&corruptID, "id", "",
 		"id of the corruption mark to remove")
 
+	corruptRestoreCmd.Flags().StringVar(&corruptID, "id", "",
+		"id of the corruption mark to restore")
+	corruptRestoreCmd.Flags().BoolVar(&corruptForce, "force", false,
+		"restore even if the text has drifted from the stored quote")
+
 	corruptCmd.AddCommand(corruptListCmd)
 	corruptCmd.AddCommand(corruptRmCmd)
+	corruptCmd.AddCommand(corruptRestoreCmd)
 	rootCmd.AddCommand(corruptCmd)
 }

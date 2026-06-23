@@ -6,6 +6,7 @@ package corrupt
 import (
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -19,6 +20,12 @@ import (
 	"github.com/isdg/hr/internal/textfmt"
 	"github.com/isdg/hr/internal/vault"
 )
+
+// ErrDrift means the article text at a mark's recorded location no
+// longer matches its captured quote, so the location can't be trusted
+// for an automatic edit.
+var ErrDrift = errors.New(
+	"article text no longer matches the mark's quote (drift)")
 
 // DefaultContextLines is how many lines of surrounding text are captured
 // on each side of a marked region when the caller doesn't specify.
@@ -78,6 +85,63 @@ func Mark(articlePath string, r Range, note string, ctxLines int) (meta.Corrupti
 // Remove deletes a corruption mark by id.
 func Remove(articlePath, id string) (bool, error) {
 	return meta.RemoveCorruption(articlePath, id)
+}
+
+// Restore replaces the region of the mark id with replacement, then
+// clears the mark. It refuses with ErrDrift if the current text at the
+// recorded range no longer matches the stored quote, unless force.
+func Restore(articlePath, id, replacement string, force bool) error {
+	m := meta.LoadOrDefault(articlePath)
+	c, ok := find(m.Corruptions, id)
+	if !ok {
+		return fmt.Errorf("no corruption with id %q", id)
+	}
+	data, err := os.ReadFile(articlePath)
+	if err != nil {
+		return err
+	}
+	text := string(data)
+	lines := strings.Split(text, "\n")
+	r := rangeOf(c)
+	if err := r.validate(len(lines)); err != nil {
+		return fmt.Errorf("mark range invalid: %w", err)
+	}
+	start, end := span(lines, r)
+	if !force && text[start:end] != c.Quote {
+		return ErrDrift
+	}
+	out := text[:start] + replacement + text[end:]
+	if err := os.WriteFile(articlePath, []byte(out), 0o644); err != nil {
+		return err
+	}
+	_, err = meta.RemoveCorruption(articlePath, id)
+	return err
+}
+
+func find(cs []meta.Corruption, id string) (meta.Corruption, bool) {
+	for _, c := range cs {
+		if c.ID == id {
+			return c, true
+		}
+	}
+	return meta.Corruption{}, false
+}
+
+func rangeOf(c meta.Corruption) Range {
+	return Range{c.StartLine, c.StartCol, c.EndLine, c.EndCol}
+}
+
+// span returns the absolute byte offsets [start,end) in the file for r.
+func span(lines []string, r Range) (int, int) {
+	starts := make([]int, len(lines))
+	off := 0
+	for i, l := range lines {
+		starts[i] = off
+		off += len(l) + 1 // +1 for the joining "\n"
+	}
+	start := starts[r.StartLine-1] + colByte(lines[r.StartLine-1], r.StartCol)
+	end := starts[r.EndLine-1] + colByte(lines[r.EndLine-1], r.EndCol)
+	return start, end
 }
 
 // List returns the corruption record for a single article (empty
