@@ -144,7 +144,15 @@ func printCorruptions(recs []corrupt.Record) error {
 			total++
 			loc := fmt.Sprintf("%d:%d-%d:%d",
 				c.StartLine, c.StartCol, c.EndLine, c.EndCol)
-			fmt.Printf("%s  %s  %s  %q", rec.Path, c.ID, loc, oneLine(c.Quote))
+			flag := " "
+			if c.Stale {
+				flag = "!"
+			}
+			fmt.Printf("%s %s  %s  %s  %q",
+				flag, rec.Path, c.ID, loc, oneLine(c.Quote))
+			if c.Stale {
+				fmt.Print("  [STALE]")
+			}
 			if c.Note != "" {
 				fmt.Printf("  (%s)", c.Note)
 			}

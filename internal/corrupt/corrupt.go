@@ -47,11 +47,22 @@ type Record struct {
 	Corruptions []meta.Corruption `json:"corruptions"`
 }
 
+// MarkOptions configures Mark.
+type MarkOptions struct {
+	Note         string
+	ContextLines int    // surrounding lines per side; <0 means default
+	Expect       string // if non-empty, the extracted text must match it
+}
+
 // Mark extracts the text at r from the article and records a corruption
 // on its sidecar, returning the stored entry. Re-marking the identical
-// region updates the existing entry rather than duplicating it. ctxLines
-// surrounding lines are captured on each side (negative means default).
-func Mark(articlePath string, r Range, note string, ctxLines int) (meta.Corruption, error) {
+// region updates the existing entry rather than duplicating it.
+//
+// If opts.Expect is set (e.g. the selection piped from the editor) and
+// the extracted text doesn't match it, Mark fails without writing —
+// catching a wrong range before it's persisted.
+func Mark(articlePath string, r Range, opts MarkOptions) (meta.Corruption, error) {
+	ctxLines := opts.ContextLines
 	if ctxLines < 0 {
 		ctxLines = DefaultContextLines
 	}
@@ -65,6 +76,13 @@ func Mark(articlePath string, r Range, note string, ctxLines int) (meta.Corrupti
 	}
 
 	quote := extract(lines, r)
+	if want := strings.TrimRight(opts.Expect, "\n"); want != "" &&
+		want != strings.TrimRight(quote, "\n") {
+		return meta.Corruption{}, fmt.Errorf(
+			"selection mismatch: range extracts %q, stdin has %q "+
+				"(range likely wrong; pass --force to mark anyway)",
+			quote, want)
+	}
 	c := meta.Corruption{
 		ID:        id(r, quote),
 		StartLine: r.StartLine,
@@ -73,7 +91,7 @@ func Mark(articlePath string, r Range, note string, ctxLines int) (meta.Corrupti
 		EndCol:    r.EndCol,
 		Quote:     quote,
 		Context:   context(lines, r, ctxLines),
-		Note:      textfmt.Line(note),
+		Note:      textfmt.Line(opts.Note),
 		CreatedAt: time.Now().UTC(),
 	}
 	if err := meta.AddCorruption(articlePath, c); err != nil {
@@ -145,15 +163,40 @@ func span(lines []string, r Range) (int, int) {
 }
 
 // List returns the corruption record for a single article (empty
-// Corruptions if none).
+// Corruptions if none). Each corruption's Stale flag is computed against
+// the current article text.
 func List(articlePath string) (Record, error) {
 	m := meta.LoadOrDefault(articlePath)
-	rec := Record{Path: articlePath, Corruptions: m.Corruptions}
+	rec := Record{Path: articlePath}
 	if fm, err := article.ParseFile(articlePath); err == nil {
 		rec.Feed = textfmt.Line(fm.Feed)
 		rec.Title = textfmt.Line(fm.Title)
 	}
+	if len(m.Corruptions) == 0 {
+		return rec, nil
+	}
+	cs := make([]meta.Corruption, len(m.Corruptions))
+	copy(cs, m.Corruptions)
+	if data, err := os.ReadFile(articlePath); err == nil {
+		text := string(data)
+		lines := strings.Split(text, "\n")
+		for i := range cs {
+			cs[i].Stale = isStale(text, lines, cs[i])
+		}
+	}
+	rec.Corruptions = cs
 	return rec, nil
+}
+
+// isStale reports whether the text at c's recorded range no longer
+// matches its quote (e.g. after the article was reformatted).
+func isStale(text string, lines []string, c meta.Corruption) bool {
+	r := rangeOf(c)
+	if r.validate(len(lines)) != nil {
+		return true
+	}
+	start, end := span(lines, r)
+	return text[start:end] != c.Quote
 }
 
 // ListAll walks the vault and returns one Record per article that has at

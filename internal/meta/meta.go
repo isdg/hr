@@ -37,6 +37,10 @@ type Corruption struct {
 	Context   string    `toml:"context,omitempty" json:"context,omitempty"`
 	Note      string    `toml:"note,omitempty" json:"note,omitempty"`
 	CreatedAt time.Time `toml:"created_at" json:"created_at"`
+
+	// Stale is computed at read time (never persisted): true when the
+	// article text at the recorded range no longer matches Quote.
+	Stale bool `toml:"-" json:"stale,omitempty"`
 }
 
 func Path(articlePath string) string {
