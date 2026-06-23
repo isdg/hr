@@ -44,13 +44,38 @@ See 'hr corrupt list --all --json' for the unified report, and
 		if err != nil {
 			return err
 		}
-		c, err := corrupt.Mark(args[0], r, corruptNote, corruptContext)
+		opts := corrupt.MarkOptions{
+			Note:         corruptNote,
+			ContextLines: corruptContext,
+		}
+		// When a selection is piped in (and not forcing), verify the
+		// range extracts the same text — catches editor range bugs.
+		if !corruptForce {
+			if expect, ok := readPipedStdin(cmd); ok {
+				opts.Expect = expect
+			}
+		}
+		c, err := corrupt.Mark(args[0], r, opts)
 		if err != nil {
 			return err
 		}
 		fmt.Printf("marked %s (lines %d-%d)\n", c.ID, c.StartLine, c.EndLine)
 		return nil
 	},
+}
+
+// readPipedStdin returns stdin's contents when it's piped/redirected
+// (not an interactive terminal), so commands can opt into reading it.
+func readPipedStdin(cmd *cobra.Command) (string, bool) {
+	fi, err := os.Stdin.Stat()
+	if err != nil || fi.Mode()&os.ModeCharDevice != 0 {
+		return "", false // interactive terminal: nothing piped
+	}
+	b, err := io.ReadAll(cmd.InOrStdin())
+	if err != nil || len(b) == 0 {
+		return "", false
+	}
+	return string(b), true
 }
 
 var corruptListCmd = &cobra.Command{
@@ -212,6 +237,8 @@ func init() {
 	corruptCmd.Flags().IntVar(&corruptContext, "context-lines",
 		corrupt.DefaultContextLines,
 		"lines of surrounding context to capture on each side")
+	corruptCmd.Flags().BoolVar(&corruptForce, "force", false,
+		"skip stdin selection verification")
 	_ = corruptCmd.MarkFlagRequired("range")
 
 	corruptListCmd.Flags().BoolVar(&corruptAll, "all", false,

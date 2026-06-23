@@ -59,13 +59,33 @@ func TestValidate(t *testing.T) {
 	}
 }
 
+func TestMarkExpectMismatch(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a.md")
+	// line 5 "The quick brwn fox." — "brwn" is bytes 10-14.
+	if err := os.WriteFile(path,
+		[]byte("---\nx\n---\n\nThe quick brwn fox.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r := Range{5, 10, 5, 14}
+	if _, err := Mark(path, r, MarkOptions{Expect: "quick", ContextLines: -1}); err == nil {
+		t.Fatal("expected selection-mismatch error")
+	}
+	if m := meta.LoadOrDefault(path); len(m.Corruptions) != 0 {
+		t.Fatalf("mark persisted despite mismatch: %d", len(m.Corruptions))
+	}
+	if _, err := Mark(path, r, MarkOptions{Expect: "brwn", ContextLines: -1}); err != nil {
+		t.Fatalf("matching expect should succeed: %v", err)
+	}
+}
+
 func TestMarkRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "a.md")
 	if err := os.WriteFile(path, []byte("---\nx\n---\n\n"+emLine+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	c, err := Mark(path, Range{5, 0, 5, 12}, "garble", DefaultContextLines)
+	c, err := Mark(path, Range{5, 0, 5, 12}, MarkOptions{Note: "garble", ContextLines: -1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +93,7 @@ func TestMarkRoundTrip(t *testing.T) {
 		t.Fatalf("invalid UTF-8 quote: %q", c.Quote)
 	}
 	// Re-mark identical region: upsert, not duplicate.
-	if _, err := Mark(path, Range{5, 0, 5, 12}, "again", DefaultContextLines); err != nil {
+	if _, err := Mark(path, Range{5, 0, 5, 12}, MarkOptions{Note: "again", ContextLines: -1}); err != nil {
 		t.Fatal(err)
 	}
 	m := meta.LoadOrDefault(path)
