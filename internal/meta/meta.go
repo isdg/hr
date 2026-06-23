@@ -14,11 +14,29 @@ import (
 )
 
 type Meta struct {
-	Read     bool       `toml:"read"`
-	ReadAt   *time.Time `toml:"read_at,omitempty"`
-	Favorite bool       `toml:"favorite"`
-	Tags     []string   `toml:"tags,omitempty"`
-	Alias    string     `toml:"alias,omitempty"`
+	Read        bool         `toml:"read"`
+	ReadAt      *time.Time   `toml:"read_at,omitempty"`
+	Favorite    bool         `toml:"favorite"`
+	Tags        []string     `toml:"tags,omitempty"`
+	Alias       string       `toml:"alias,omitempty"`
+	Corruptions []Corruption `toml:"corruptions,omitempty"`
+}
+
+// Corruption marks a region of an article's text as corrupted so it can
+// later be restored (by an LLM or other tooling). Positions use 1-based
+// lines and 0-based byte columns; EndCol is exclusive. Quote is the
+// exact selected substring and Context a few surrounding lines, both
+// captured at mark time so restoration survives later line drift.
+type Corruption struct {
+	ID        string    `toml:"id" json:"id"`
+	StartLine int       `toml:"start_line" json:"start_line"`
+	StartCol  int       `toml:"start_col" json:"start_col"`
+	EndLine   int       `toml:"end_line" json:"end_line"`
+	EndCol    int       `toml:"end_col" json:"end_col"`
+	Quote     string    `toml:"quote" json:"quote"`
+	Context   string    `toml:"context,omitempty" json:"context,omitempty"`
+	Note      string    `toml:"note,omitempty" json:"note,omitempty"`
+	CreatedAt time.Time `toml:"created_at" json:"created_at"`
 }
 
 func Path(articlePath string) string {
@@ -161,6 +179,48 @@ func ToggleFavorite(articlePath string) (bool, error) {
 	}
 	m.Favorite = !m.Favorite
 	return m.Favorite, Save(articlePath, m)
+}
+
+// AddCorruption upserts c (keyed by ID) onto the article's sidecar.
+func AddCorruption(articlePath string, c Corruption) error {
+	if err := ensureArticle(articlePath); err != nil {
+		return err
+	}
+	m, err := loadForUpdate(articlePath)
+	if err != nil {
+		return err
+	}
+	for i := range m.Corruptions {
+		if m.Corruptions[i].ID == c.ID {
+			m.Corruptions[i] = c
+			return Save(articlePath, m)
+		}
+	}
+	m.Corruptions = append(m.Corruptions, c)
+	return Save(articlePath, m)
+}
+
+// RemoveCorruption deletes the corruption with the given id, returning
+// whether one was found and removed.
+func RemoveCorruption(articlePath, id string) (bool, error) {
+	if err := ensureArticle(articlePath); err != nil {
+		return false, err
+	}
+	m, err := loadForUpdate(articlePath)
+	if err != nil {
+		return false, err
+	}
+	kept := make([]Corruption, 0, len(m.Corruptions))
+	for _, c := range m.Corruptions {
+		if c.ID != id {
+			kept = append(kept, c)
+		}
+	}
+	if len(kept) == len(m.Corruptions) {
+		return false, nil
+	}
+	m.Corruptions = kept
+	return true, Save(articlePath, m)
 }
 
 func WriteIfAbsent(articlePath string) (bool, error) {
