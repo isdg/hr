@@ -29,8 +29,43 @@ type Article struct {
 }
 
 func (a *Article) Filename() string {
-	date := a.Published.Format("2006-01-02")
-	return fmt.Sprintf("%s-%s-%s.md", date, slugify(a.Title), a.ID())
+	return NameFor(a.Title, a.Published, a.ID())
+}
+
+// NameFor builds the canonical article filename "<date>-<slug>-<id>.md".
+func NameFor(title string, published time.Time, id string) string {
+	return fmt.Sprintf("%s-%s-%s.md",
+		published.Format("2006-01-02"), slugify(title), id)
+}
+
+var idInName = regexp.MustCompile(`-([0-9a-f]{8})\.md$`)
+
+// IDFromName extracts the stable 8-char id from a canonical filename.
+func IDFromName(name string) (string, bool) {
+	m := idInName.FindStringSubmatch(name)
+	if m == nil {
+		return "", false
+	}
+	return m[1], true
+}
+
+// ParseTime parses an RFC3339 timestamp, tolerating the signed/negative
+// (BC) years that Go's RFC3339 layout rejects. Returns the zero time if
+// unparseable.
+func ParseTime(s string) time.Time {
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t
+	}
+	rest, ok := strings.CutPrefix(s, "-")
+	if !ok {
+		return time.Time{}
+	}
+	t, err := time.Parse(time.RFC3339, rest)
+	if err != nil {
+		return time.Time{}
+	}
+	return time.Date(-t.Year(), t.Month(), t.Day(),
+		t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), t.Location())
 }
 
 // ID returns a stable 8-char fingerprint for the article, derived from
@@ -147,6 +182,12 @@ func Fmt(path string) (bool, error) {
 		return false, nil
 	}
 	return true, writeArticleFile(path, fm, body)
+}
+
+// Rewrite saves the article at path with the given frontmatter and body
+// (body preserved verbatim, frontmatter re-marshaled).
+func Rewrite(path string, fm *Frontmatter, body []byte) error {
+	return writeArticleFile(path, fm, body)
 }
 
 func writeArticleFile(

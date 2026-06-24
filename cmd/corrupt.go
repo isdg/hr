@@ -116,6 +116,27 @@ var corruptRmCmd = &cobra.Command{
 	},
 }
 
+var corruptUndoCmd = &cobra.Command{
+	Use:   "undo <article.md>",
+	Short: "Remove the most recently added corruption mark",
+	Long: `Remove the most recently created corruption mark on an article.
+
+A convenience for clearing a mark you just made by mistake, without
+having to look up its id (see 'hr corrupt rm' to remove a specific one).`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c, ok, err := corrupt.Undo(args[0])
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("no corruption marks to undo")
+		}
+		fmt.Printf("undid %s (lines %d-%d)\n", c.ID, c.StartLine, c.EndLine)
+		return nil
+	},
+}
+
 var corruptRestoreCmd = &cobra.Command{
 	Use:   "restore <article.md> --id <id>",
 	Short: "Replace a marked region with text from stdin, then clear the mark",
@@ -256,6 +277,7 @@ func init() {
 
 	corruptCmd.AddCommand(corruptListCmd)
 	corruptCmd.AddCommand(corruptRmCmd)
+	corruptCmd.AddCommand(corruptUndoCmd)
 	corruptCmd.AddCommand(corruptRestoreCmd)
 	rootCmd.AddCommand(corruptCmd)
 }

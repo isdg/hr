@@ -204,6 +204,31 @@ func AddCorruption(articlePath string, c Corruption) error {
 	return Save(articlePath, m)
 }
 
+// RemoveLastCorruption deletes the most recently created corruption mark,
+// returning the removed entry and whether one was found. On equal
+// timestamps the last-appended mark wins (the natural "undo" target).
+func RemoveLastCorruption(articlePath string) (Corruption, bool, error) {
+	if err := ensureArticle(articlePath); err != nil {
+		return Corruption{}, false, err
+	}
+	m, err := loadForUpdate(articlePath)
+	if err != nil {
+		return Corruption{}, false, err
+	}
+	if len(m.Corruptions) == 0 {
+		return Corruption{}, false, nil
+	}
+	last := 0
+	for i := range m.Corruptions {
+		if !m.Corruptions[i].CreatedAt.Before(m.Corruptions[last].CreatedAt) {
+			last = i
+		}
+	}
+	removed := m.Corruptions[last]
+	m.Corruptions = append(m.Corruptions[:last], m.Corruptions[last+1:]...)
+	return removed, true, Save(articlePath, m)
+}
+
 // RemoveCorruption deletes the corruption with the given id, returning
 // whether one was found and removed.
 func RemoveCorruption(articlePath, id string) (bool, error) {

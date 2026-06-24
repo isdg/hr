@@ -105,6 +105,12 @@ func Remove(articlePath, id string) (bool, error) {
 	return meta.RemoveCorruption(articlePath, id)
 }
 
+// Undo removes the most recently created corruption mark from the article,
+// returning the removed entry (ok=false when there were none to undo).
+func Undo(articlePath string) (meta.Corruption, bool, error) {
+	return meta.RemoveLastCorruption(articlePath)
+}
+
 // Restore replaces the region of the mark id with replacement, then
 // clears the mark. It refuses with ErrDrift if the current text at the
 // recorded range no longer matches the stored quote, unless force.

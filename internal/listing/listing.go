@@ -113,19 +113,7 @@ func loadItem(path string) (Item, error) {
 // BC-dated articles but that Go's RFC3339 layout refuses to parse back.
 // Returns the zero time if the value is unparseable.
 func parsePublished(s string) time.Time {
-	if t, err := time.Parse(time.RFC3339, s); err == nil {
-		return t
-	}
-	rest, ok := strings.CutPrefix(s, "-")
-	if !ok {
-		return time.Time{}
-	}
-	t, err := time.Parse(time.RFC3339, rest)
-	if err != nil {
-		return time.Time{}
-	}
-	return time.Date(-t.Year(), t.Month(), t.Day(),
-		t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), t.Location())
+	return article.ParseTime(s)
 }
 
 func (f Filter) match(it Item, now time.Time) bool {
