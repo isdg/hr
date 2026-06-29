@@ -17,6 +17,7 @@ import (
 	"github.com/isdg/hr/internal/errlog"
 	"github.com/isdg/hr/internal/feed"
 	"github.com/isdg/hr/internal/meta"
+	"github.com/isdg/hr/internal/tombstone"
 	"github.com/isdg/hr/internal/vault"
 )
 
@@ -124,8 +125,14 @@ func syncFeed(
 		return fr
 	}
 
+	feedDir := filepath.Join(opts.Vault.FeedsDir(), f.Name)
+	deleted, _ := tombstone.DeletedIDs(feedDir)
+
 	for _, item := range res.Feed.Items {
 		a := itemToArticle(item, f.Name, conv)
+		if deleted[a.ID()] {
+			continue // tombstoned: sync-safe delete
+		}
 		written, path, err := article.Write(opts.Vault.FeedsDir(), a)
 		if err != nil {
 			elog.Write(tag+":write", err)
