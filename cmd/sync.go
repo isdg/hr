@@ -1,15 +1,18 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/isdg/hr/internal/config"
+	"github.com/isdg/hr/internal/git"
 	"github.com/isdg/hr/internal/syncer"
 	"github.com/isdg/hr/internal/vault"
 )
@@ -18,6 +21,7 @@ var (
 	syncFeedFilter string
 	syncForce      bool
 	syncJobs       int
+	syncCommit     bool
 )
 
 var syncCmd = &cobra.Command{
@@ -60,11 +64,37 @@ var syncCmd = &cobra.Command{
 					liveLine(live, nameW, counterW, i, tot, fr))
 			},
 		})
-		if res != nil {
-			printSyncSummary(res, time.Since(start))
+		if res == nil {
+			return err
 		}
-		return err
+		printSyncSummary(res, time.Since(start))
+
+		commit := cfg.AutoCommit
+		if cmd.Flags().Changed("commit") {
+			commit = syncCommit
+		}
+		if !commit {
+			return err
+		}
+		// Commit even after a partial failure: what was written is
+		// complete, and leaving it out would only defer it to a later run.
+		return errors.Join(err, commitSync(cmd, v, res))
 	},
+}
+
+// commitSync commits the files the sync wrote, if any, and reports it.
+func commitSync(cmd *cobra.Command, v *vault.Vault, res *syncer.Result) error {
+	paths := res.Written()
+	if len(paths) == 0 {
+		return nil
+	}
+	msg := res.CommitMessage()
+	if err := git.Commit(cmd.Context(), v.Root, msg, paths); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+	subject, _, _ := strings.Cut(msg, "\n")
+	fmt.Printf("  committed: %s\n", subject)
+	return nil
 }
 
 // feedLayout returns the widest selected feed name and how many feeds are
@@ -203,5 +233,7 @@ func init() {
 		"ignore cache and refetch even if not modified")
 	syncCmd.Flags().IntVarP(&syncJobs, "jobs", "j", 0,
 		"number of feeds to fetch in parallel (0 = default)")
+	syncCmd.Flags().BoolVar(&syncCommit, "commit", false,
+		"commit new articles to git (default: autocommit in hr.toml)")
 	rootCmd.AddCommand(syncCmd)
 }

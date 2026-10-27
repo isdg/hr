@@ -16,6 +16,10 @@ type Config struct {
 	ShowRead  bool   `toml:"showread"`
 	Ordering  string `toml:"ordering"`
 	UserAgent string `toml:"user_agent"`
+
+	// AutoCommit makes `hr sync` commit the files it writes to the git
+	// repository holding the vault.
+	AutoCommit bool `toml:"autocommit"`
 }
 
 // TagManual marks a hand-curated feed: one with nothing to poll, whose

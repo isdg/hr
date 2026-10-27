@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"testing"
 
@@ -375,5 +376,74 @@ func TestFeedIsManual(t *testing.T) {
 			t.Errorf("Feed{Tags: %v}.IsManual() = %v, want %v",
 				c.tags, got, c.want)
 		}
+	}
+}
+
+// Written lists each new article with its sidecar, and nothing once the
+// items are already on disk; a missing sidecar is backfilled and listed.
+func TestRunWritten(t *testing.T) {
+	srv := testServer(t)
+	defer srv.Close()
+	v := newVault(t)
+	cfg := &config.Config{Feeds: []config.Feed{
+		{Name: "alpha", URL: srv.URL + "/ok"},
+	}}
+
+	res, err := Run(context.Background(), Options{Vault: v, Config: cfg})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := res.Written()
+	md, _ := filepath.Glob(filepath.Join(v.FeedsDir(), "alpha", "*.md"))
+	side, _ := filepath.Glob(
+		filepath.Join(v.FeedsDir(), "alpha", "*.meta.toml"))
+	want := append(md, side...)
+	slices.Sort(got)
+	slices.Sort(want)
+	if len(want) != 4 || !slices.Equal(got, want) {
+		t.Errorf("Written = %q, want %q", got, want)
+	}
+
+	if err := os.Remove(side[0]); err != nil {
+		t.Fatal(err)
+	}
+	res, err = Run(context.Background(),
+		Options{Vault: v, Config: cfg, Force: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := res.Written(); !slices.Equal(got, side[:1]) {
+		t.Errorf("Written on resync = %q, want %q", got, side[:1])
+	}
+}
+
+func TestCommitMessage(t *testing.T) {
+	r := &Result{Feeds: []FeedResult{
+		{Name: "lwn", New: 2, Written: make([]string, 4)},
+		{Name: "go", New: 0},
+		{Name: "lobsters", New: 5, Written: make([]string, 10)},
+		{Name: "bun", New: 2, Written: make([]string, 4)},
+	}}
+	want := "sync: 9 new articles\n\n" +
+		"lobsters  +5\n" +
+		"bun       +2\n" +
+		"lwn       +2"
+	if got := r.CommitMessage(); got != want {
+		t.Errorf("got\n%s\nwant\n%s", got, want)
+	}
+
+	one := &Result{Feeds: []FeedResult{
+		{Name: "go", New: 1, Written: make([]string, 2)},
+	}}
+	if got := one.CommitMessage(); got != "sync: 1 new article\n\ngo  +1" {
+		t.Errorf("got %q", got)
+	}
+
+	sidecars := &Result{Feeds: []FeedResult{
+		{Name: "go", Written: make([]string, 3)},
+	}}
+	want = "sync: add 3 missing sidecars"
+	if got := sidecars.CommitMessage(); got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }
