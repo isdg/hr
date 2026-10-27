@@ -159,6 +159,27 @@ Declaring them has a second benefit: `hr doctor` stops reporting the
 directory as *"not declared in hr.toml"*. A `url` alongside the tag is
 flagged as contradictory, since sync skips the feed either way.
 
+### Committing what sync fetched
+
+With `autocommit = true` in `hr.toml`, `hr sync` commits the articles
+and sidecars it just wrote to the git repository holding the vault:
+
+```
+sync: 9 new articles
+
+lobsters  +5
+bun       +2
+lwn       +2
+```
+
+Only those files go in. Anything else you have staged or modified is
+left alone, and nothing is pushed. `hr sync --commit` or
+`--commit=false` overrides the setting for one run.
+
+A failed commit (a hook rejecting it, say) fails the sync but keeps the
+articles on disk. Later syncs won't pick them up, since they only
+commit what they themselves write, so commit those by hand.
+
 ### Which vault does `hr` use?
 
 Resolved in priority order: `-C <dir>` flag > `$HR_VAULT` > walking up

@@ -63,6 +63,11 @@ type FeedResult struct {
 	Total       int
 	NotModified bool
 
+	// Written lists the files this sync created: each new article and
+	// any sidecar it had to add. A feed that errored part-way still
+	// reports what it wrote before failing.
+	Written []string
+
 	// Manual is set for a hand-curated feed (config.TagManual). Nothing
 	// was fetched: the feed has no URL to poll and only changes when its
 	// articles are updated by hand.
@@ -223,13 +228,18 @@ func syncFeed(
 		}
 		if written {
 			fr.New++
+			fr.Written = append(fr.Written, path)
 		} else {
 			fr.Existing++
 		}
-		if _, err := meta.WriteIfAbsent(path); err != nil {
+		created, err := meta.WriteIfAbsent(path)
+		if err != nil {
 			elog.Write(tag+":meta", err)
 			fr.Err = err
 			return fr
+		}
+		if created {
+			fr.Written = append(fr.Written, meta.Path(path))
 		}
 		if err := writeRawHTML(opts.Vault, item, a); err != nil {
 			elog.Write(tag+":raw", err)
