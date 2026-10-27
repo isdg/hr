@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/isdg/hr/internal/config"
 )
 
 func TestDiscover(t *testing.T) {
@@ -61,5 +63,24 @@ func TestResolvePrefersDiscoveryOverRC(t *testing.T) {
 	}
 	if got != wantReal {
 		t.Fatalf("Resolve() = %q, want %q", got, wantReal)
+	}
+}
+
+// Every setting in the template must be top-level: below a [[feeds]]
+// header TOML hands it to that feed, and hr silently ignores it.
+func TestDefaultConfigSettingsAreTopLevel(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "hr.toml")
+	if err := os.WriteFile(p, buildConfig("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Unknown) > 0 {
+		t.Errorf("template has unrecognised keys %q", cfg.Unknown)
+	}
+	if cfg.Ordering != "desc" || cfg.UserAgent != "hr/0.1" {
+		t.Errorf("settings not applied: %+v", cfg)
 	}
 }

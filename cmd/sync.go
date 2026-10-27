@@ -40,6 +40,10 @@ var syncCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		if n := len(cfg.Unknown); n > 0 {
+			fmt.Fprintf(os.Stderr, "warning: hr.toml has %s, "+
+				"ignored (see `hr doctor`)\n", plural(n, "unknown key"))
+		}
 		ua := cfg.UserAgent
 		if ua == "" {
 			ua = "hr/0.1"

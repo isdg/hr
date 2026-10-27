@@ -4,6 +4,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -20,6 +21,10 @@ type Config struct {
 	// AutoCommit makes `hr sync` commit the files it writes to the git
 	// repository holding the vault.
 	AutoCommit bool `toml:"autocommit"`
+
+	// Unknown lists the dotted keys Load did not recognise, which are
+	// otherwise ignored, e.g. "feeds.ordering".
+	Unknown []string `toml:"-"`
 }
 
 // TagManual marks a hand-curated feed: one with nothing to poll, whose
@@ -60,8 +65,25 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("read config: %w", err)
 	}
 	var c Config
-	if err := toml.Unmarshal(data, &c); err != nil {
+	md, err := toml.Decode(string(data), &c)
+	if err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
+	for _, k := range md.Undecoded() {
+		c.Unknown = append(c.Unknown, k.String())
+	}
 	return &c, nil
+}
+
+// IsSetting reports whether key names a vault-wide setting such as
+// "ordering". Below a [[feeds]] header TOML gives such a key to that
+// feed, which is the usual way one goes unrecognised.
+func IsSetting(key string) bool {
+	for _, f := range reflect.VisibleFields(reflect.TypeFor[Config]()) {
+		name, _, _ := strings.Cut(f.Tag.Get("toml"), ",")
+		if name == key {
+			return name != "feeds" && name != "-"
+		}
+	}
+	return false
 }

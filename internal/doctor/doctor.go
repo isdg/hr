@@ -117,6 +117,15 @@ func severityRank(s Severity) int {
 type addFunc func(sev Severity, path, format string, args ...any)
 
 func checkConfig(cfg *config.Config, add addFunc) map[string]bool {
+	for _, k := range cfg.Unknown {
+		s, inFeed := strings.CutPrefix(k, "feeds.")
+		if inFeed && config.IsSetting(s) {
+			add(Warn, "hr.toml", "%q is set inside a [[feeds]] entry, "+
+				"so it is ignored; move it above the first [[feeds]]", s)
+			continue
+		}
+		add(Warn, "hr.toml", "unknown key %q is ignored", k)
+	}
 	names := make(map[string]bool, len(cfg.Feeds))
 	for _, f := range cfg.Feeds {
 		if f.Name == "" {
