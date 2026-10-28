@@ -33,7 +33,8 @@ sidebar with its own buffer keys (`<CR>`/`o`/`r`/`u`/`f`/`a`/`R`/`s`/`q`/`?`).
     raw/<feed>/<date>-<slug>-<id>.html   # original HTML, keyed by feed name
     err.txt                              # one line per error during sync
 ~/.hrrc                                  # global default vault: vault = "..."
-                                          # (set/read via `hr use`)
+                                          # (set/read via `hr use`), plus
+                                          # your settings for every vault
 ```
 
 The `<id>` segment is the first 8 hex chars of `sha1(GUID || URL ||
@@ -187,6 +188,25 @@ from the current directory for an `hr.toml` (like `git` finds `.git`,
 so a cloned vault works as soon as you `cd` into it) > the global
 default in `~/.hrrc` (`hr use <dir>` to set it, `hr use` to show it,
 `hr use --clear` to unset it).
+
+### Your settings and the vault's
+
+`ordering`, `autoread`, `showread`, `user_agent` and `autocommit` can
+be set in `~/.hrrc` as your defaults for every vault, or in a vault's
+`hr.toml` for that vault alone. A key the vault sets wins, even when it
+sets `false`; a key it leaves out keeps your value.
+
+```toml
+# ~/.hrrc
+vault = "~/feed"
+ordering = "desc"
+user_agent = "hrb/0.1"
+```
+
+In `hr.toml` they must sit above the first `[[feeds]]`: TOML gives a key
+below that header to the feed, and `hr doctor` flags it. `hr use` and
+`hr init` change only the `vault` line of `~/.hrrc`, so your settings
+and comments are kept.
 
 `hr doctor` checks a vault's `hr.toml` and feed directories for
 inconsistencies (malformed sidecars, orphaned files, tombstone

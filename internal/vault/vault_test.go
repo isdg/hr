@@ -73,7 +73,7 @@ func TestDefaultConfigSettingsAreTopLevel(t *testing.T) {
 	if err := os.WriteFile(p, buildConfig("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := config.Load(p)
+	cfg, err := config.Load(p, config.Settings{})
 	if err != nil {
 		t.Fatal(err)
 	}

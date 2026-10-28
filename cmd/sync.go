@@ -36,12 +36,12 @@ var syncCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		cfg, err := config.Load(v.ConfigPath())
+		cfg, r, err := loadConfig(v)
 		if err != nil {
 			return err
 		}
-		if n := len(cfg.Unknown); n > 0 {
-			fmt.Fprintf(os.Stderr, "warning: hr.toml has %s, "+
+		if n := len(cfg.Unknown) + len(r.Unknown); n > 0 {
+			fmt.Fprintf(os.Stderr, "warning: %s in hr.toml or ~/.hrrc, "+
 				"ignored (see `hr doctor`)\n", plural(n, "unknown key"))
 		}
 		ua := cfg.UserAgent

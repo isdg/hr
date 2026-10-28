@@ -11,8 +11,18 @@ import (
 )
 
 type Config struct {
-	Name      string `toml:"name"`
-	Feeds     []Feed `toml:"feeds"`
+	Name  string `toml:"name"`
+	Feeds []Feed `toml:"feeds"`
+	Settings
+
+	// Unknown lists the dotted keys Load did not recognise, which are
+	// otherwise ignored, e.g. "feeds.ordering".
+	Unknown []string `toml:"-"`
+}
+
+// Settings are the keys a vault's hr.toml shares with the user's
+// ~/.hrrc. A key the vault sets wins; otherwise the ~/.hrrc value holds.
+type Settings struct {
 	AutoRead  bool   `toml:"autoread"`
 	ShowRead  bool   `toml:"showread"`
 	Ordering  string `toml:"ordering"`
@@ -21,10 +31,6 @@ type Config struct {
 	// AutoCommit makes `hr sync` commit the files it writes to the git
 	// repository holding the vault.
 	AutoCommit bool `toml:"autocommit"`
-
-	// Unknown lists the dotted keys Load did not recognise, which are
-	// otherwise ignored, e.g. "feeds.ordering".
-	Unknown []string `toml:"-"`
 }
 
 // TagManual marks a hand-curated feed: one with nothing to poll, whose
@@ -59,12 +65,14 @@ func (f Feed) IsManual() bool {
 	return false
 }
 
-func Load(path string) (*Config, error) {
+// Load reads the hr.toml at path over base, the user's settings: only
+// the keys the file sets replace base's values.
+func Load(path string, base Settings) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read config: %w", err)
 	}
-	var c Config
+	c := Config{Settings: base}
 	md, err := toml.Decode(string(data), &c)
 	if err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
@@ -75,14 +83,13 @@ func Load(path string) (*Config, error) {
 	return &c, nil
 }
 
-// IsSetting reports whether key names a vault-wide setting such as
+// IsSetting reports whether key names one of the Settings, such as
 // "ordering". Below a [[feeds]] header TOML gives such a key to that
 // feed, which is the usual way one goes unrecognised.
 func IsSetting(key string) bool {
-	for _, f := range reflect.VisibleFields(reflect.TypeFor[Config]()) {
-		name, _, _ := strings.Cut(f.Tag.Get("toml"), ",")
-		if name == key {
-			return name != "feeds" && name != "-"
+	for _, f := range reflect.VisibleFields(reflect.TypeFor[Settings]()) {
+		if name, _, _ := strings.Cut(f.Tag.Get("toml"), ","); name == key {
+			return true
 		}
 	}
 	return false

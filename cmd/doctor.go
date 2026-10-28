@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/isdg/hr/internal/doctor"
+	"github.com/isdg/hr/internal/rc"
 )
 
 var doctorJSON bool
@@ -29,6 +30,17 @@ error-level issue was found.`,
 		report, err := doctor.Check(v, cfg)
 		if err != nil {
 			return err
+		}
+		r, err := rc.Load()
+		if err != nil {
+			return err
+		}
+		for _, k := range r.Unknown {
+			report.Issues = append(report.Issues, doctor.Issue{
+				Severity: doctor.Warn,
+				Path:     "~/.hrrc",
+				Message:  fmt.Sprintf("unknown key %q is ignored", k),
+			})
 		}
 		if doctorJSON {
 			enc := json.NewEncoder(os.Stdout)

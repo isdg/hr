@@ -86,7 +86,7 @@ name = "lobsters"
 	}
 
 	// The file must still parse, with everything else intact.
-	cfg, err := Load(p)
+	cfg, err := Load(p, Settings{})
 	if err != nil {
 		t.Fatalf("result does not parse: %v", err)
 	}
@@ -212,7 +212,7 @@ name = "x"
 	if !strings.Contains(got, "[other]\nname = \"x\"\n") {
 		t.Errorf("unrelated table touched:\n%s", got)
 	}
-	cfg, err := Load(p)
+	cfg, err := Load(p, Settings{})
 	if err != nil {
 		t.Fatalf("result does not parse: %v", err)
 	}
@@ -229,7 +229,7 @@ func TestSetGroupsHandlesSpacingAndComments(t *testing.T) {
 	if _, err := SetGroups(p, map[string]string{"x": "g"}); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := Load(p)
+	cfg, err := Load(p, Settings{})
 	if err != nil {
 		t.Fatalf("result does not parse: %v", err)
 	}
@@ -274,7 +274,7 @@ user_agent = "hr/0.1"
 			t.Errorf("lost %q:\n%s", want, got)
 		}
 	}
-	cfg, err := Load(p)
+	cfg, err := Load(p, Settings{})
 	if err != nil {
 		t.Fatalf("result does not parse: %v", err)
 	}

@@ -144,7 +144,7 @@ func Init(root, name string) (*Vault, error) {
 		return nil, fmt.Errorf("write .gitignore: %w", err)
 	}
 
-	if err := rc.Save(&rc.RC{Vault: v.Root}); err != nil {
+	if err := rc.SetVault(v.Root); err != nil {
 		return nil, fmt.Errorf("write hrrc: %w", err)
 	}
 

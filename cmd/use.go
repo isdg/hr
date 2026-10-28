@@ -22,7 +22,7 @@ flag, no $HR_VAULT, and the current directory isn't inside a vault
   hr use            print the current global default
   hr use --clear    unset it
 
-This only writes ~/.hrrc. It never creates a vault: run 'hr init' for
+This only changes the vault line of ~/.hrrc. It never creates a vault: run 'hr init' for
 that, or clone one and cd into it directly -- no ~/.hrrc needed there.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -30,7 +30,7 @@ that, or clone one and cd into it directly -- no ~/.hrrc needed there.`,
 			if len(args) > 0 {
 				return fmt.Errorf("--clear takes no path")
 			}
-			if err := rc.Save(&rc.RC{}); err != nil {
+			if err := rc.SetVault(""); err != nil {
 				return err
 			}
 			fmt.Println("cleared global default vault")
@@ -56,7 +56,7 @@ that, or clone one and cd into it directly -- no ~/.hrrc needed there.`,
 		if _, err := vault.Open(root); err != nil {
 			return err
 		}
-		if err := rc.Save(&rc.RC{Vault: root}); err != nil {
+		if err := rc.SetVault(root); err != nil {
 			return err
 		}
 		fmt.Printf("global default vault set to %s\n", root)
