@@ -31,6 +31,10 @@ type Item struct {
 	Favorite  bool     `json:"favorite"`
 	Tags      []string `json:"tags,omitempty"`
 	Corrupt   int      `json:"corrupt,omitempty"` // count of corruption marks
+
+	// Opened is the last time the article was opened, set only by
+	// Recent: it comes from the history log, never the listing index.
+	Opened *time.Time `json:"opened,omitempty"`
 }
 
 // PubTime wraps time.Time so it JSON-serializes via an RFC3339 string

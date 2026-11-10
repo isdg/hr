@@ -2,6 +2,7 @@ package listing
 
 import (
 	"fmt"
+	"hash/crc32"
 	"os"
 	"path/filepath"
 	"slices"
@@ -12,8 +13,9 @@ import (
 )
 
 // mkDated writes an article under feeds/<rel> whose published field is
-// pub, verbatim, so tests control the date down to its formatting.
-func mkDated(t *testing.T, v *vault.Vault, rel, title, pub string) {
+// pub, verbatim, and returns its path. Ids derive from the title, so
+// titles must be unique.
+func mkDated(t *testing.T, v *vault.Vault, rel, title, pub string) string {
 	t.Helper()
 	dir := filepath.Join(v.FeedsDir(), filepath.FromSlash(rel))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -22,10 +24,12 @@ func mkDated(t *testing.T, v *vault.Vault, rel, title, pub string) {
 	body := fmt.Sprintf("---\ntitle: %q\nurl: \"http://x.test/%s\"\n"+
 		"published: %q\nfeed: %q\n---\n\nbody\n",
 		title, title, pub, filepath.Base(rel))
-	md := filepath.Join(dir, title+"-aaaaaaaa.md")
+	id := fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(title)))
+	md := filepath.Join(dir, title+"-"+id+".md")
 	if err := os.WriteFile(md, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	return md
 }
 
 func ago(d time.Duration) string {
