@@ -178,3 +178,41 @@ func TestRecencySurvivesCachedIndex(t *testing.T) {
 		t.Errorf("BC date lost in the cache: order %v", got)
 	}
 }
+
+func TestParseSince(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		want time.Duration
+	}{
+		{"7d", 7 * day},
+		{"1d", day},
+		{"0d", 0},
+		{"24h", day},
+		{"90m", 90 * time.Minute},
+		{"1h30m", 90 * time.Minute},
+		{"106751d", 106751 * day}, // the largest whole-day Duration
+	} {
+		got, err := ParseSince(tc.in)
+		if err != nil {
+			t.Errorf("ParseSince(%q): %v", tc.in, err)
+			continue
+		}
+		if got != tc.want {
+			t.Errorf("ParseSince(%q) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}
+
+// A negative or overflowing window must be refused: Filter treats
+// Since <= 0 as "no filter", so either would silently list everything,
+// or (on wrap-around) a window nobody asked for.
+func TestParseSinceRejects(t *testing.T) {
+	for _, in := range []string{
+		"", "d", "xd", "7", "7w", "1.5d", "1d12h",
+		"-1d", "-24h", "106752d", "213504d", "99999999999999999999d",
+	} {
+		if d, err := ParseSince(in); err == nil {
+			t.Errorf("ParseSince(%q) = %v, want an error", in, d)
+		}
+	}
+}

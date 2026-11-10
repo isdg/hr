@@ -5,6 +5,7 @@ package listing
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"slices"
 	"sort"
 	"strconv"
@@ -182,14 +183,23 @@ func (f Filter) matchGroup(it Item) bool {
 }
 
 // ParseSince accepts standard Go durations (e.g. 24h) plus the "Nd"
-// shorthand for N days.
+// shorthand for N days. The window must not be negative.
 func ParseSince(s string) (time.Duration, error) {
-	if days, ok := strings.CutSuffix(s, "d"); ok {
-		n, err := strconv.Atoi(days)
-		if err != nil {
-			return 0, fmt.Errorf("invalid days: %w", err)
+	days, ok := strings.CutSuffix(s, "d")
+	if !ok {
+		d, err := time.ParseDuration(s)
+		if err == nil && d < 0 {
+			err = fmt.Errorf("negative duration %q", s)
 		}
-		return time.Duration(n) * 24 * time.Hour, nil
+		return d, err
 	}
-	return time.ParseDuration(s)
+	n, err := strconv.ParseInt(days, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid days: %w", err)
+	}
+	const day = 24 * time.Hour
+	if n < 0 || n > int64(math.MaxInt64/day) {
+		return 0, fmt.Errorf("days out of range: %d", n)
+	}
+	return time.Duration(n) * day, nil
 }
