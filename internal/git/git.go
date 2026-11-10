@@ -5,6 +5,7 @@ package git
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -24,14 +25,47 @@ func Commit(ctx context.Context, dir, msg string, paths []string) error {
 		return err
 	}
 	add := []string{"add", "--pathspec-from-file=-", "--pathspec-file-nul"}
-	if err := run(ctx, dir, spec, add...); err != nil {
+	if _, err := run(ctx, dir, spec, add...); err != nil {
 		return err
 	}
 	// A pathspec makes commit take only those paths (--only), not the
 	// whole index.
 	commit := []string{"commit", "--quiet", "-m", msg,
 		"--pathspec-from-file=-", "--pathspec-file-nul"}
-	return run(ctx, dir, spec, commit...)
+	_, err = run(ctx, dir, spec, commit...)
+	return err
+}
+
+// Modified returns the tracked files under dir whose content differs from
+// HEAD, staged or not, as absolute paths. Before the first commit nothing
+// is tracked, so nothing is modified.
+func Modified(ctx context.Context, dir string) ([]string, error) {
+	if ok, err := hasHead(ctx, dir); !ok || err != nil {
+		return nil, err
+	}
+	out, err := run(ctx, dir, nil, "diff", "--name-only", "-z",
+		"--diff-filter=M", "--relative", "HEAD", "--", ".")
+	if err != nil {
+		return nil, err
+	}
+	var paths []string
+	for rel := range strings.SplitSeq(string(out), "\x00") {
+		if rel != "" {
+			paths = append(paths, filepath.Join(dir, rel))
+		}
+	}
+	return paths, nil
+}
+
+func hasHead(ctx context.Context, dir string) (bool, error) {
+	_, err := run(ctx, dir, nil,
+		"rev-parse", "--quiet", "--verify", "HEAD^{commit}")
+	// --verify --quiet exits 1, silently, only for a missing ref.
+	var exit *exec.ExitError
+	if errors.As(err, &exit) && exit.ExitCode() == 1 {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 // pathspec NUL-joins paths relative to dir, for --pathspec-file-nul.
@@ -48,18 +82,21 @@ func pathspec(dir string, paths []string) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-func run(ctx context.Context, dir string, stdin []byte, args ...string) error {
+func run(
+	ctx context.Context, dir string, stdin []byte, args ...string,
+) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	cmd.Stdin = bytes.NewReader(stdin)
 	// Article filenames are data, never globs: "[" in a slug must not
 	// match some other file.
 	cmd.Env = append(os.Environ(), "GIT_LITERAL_PATHSPECS=1")
-	var stderr bytes.Buffer
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("git %s: %w: %s",
+		return nil, fmt.Errorf("git %s: %w: %s",
 			args[0], err, strings.TrimSpace(stderr.String()))
 	}
-	return nil
+	return stdout.Bytes(), nil
 }

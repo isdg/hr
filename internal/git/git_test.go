@@ -132,3 +132,56 @@ func TestCommitNotARepo(t *testing.T) {
 		t.Errorf("err = %v, want a not-a-repository error", err)
 	}
 }
+
+func TestModified(t *testing.T) {
+	repo := newRepo(t)
+	vault := filepath.Join(repo, "vault")
+	feeds := filepath.Join(vault, "feeds")
+	edited := write(t, vault, "feeds/x/a.meta.toml")
+	staged := write(t, vault, "feeds/x/b[1].meta.toml")
+	gone := write(t, vault, "feeds/x/c.meta.toml")
+	cfg := write(t, vault, "hr.toml")
+	git(t, repo, "add", ".")
+	git(t, repo, "commit", "--quiet", "-m", "vault")
+
+	for _, p := range []string{edited, staged, cfg} {
+		err := os.WriteFile(p, []byte("read = true"), 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	git(t, repo, "add", staged)
+	if err := os.Remove(gone); err != nil {
+		t.Fatal(err)
+	}
+	write(t, vault, "feeds/x/new.meta.toml")
+
+	got, err := Modified(t.Context(), feeds)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{edited, staged}; !slices.Equal(got, want) {
+		t.Errorf("Modified = %q, want %q", got, want)
+	}
+}
+
+func TestModifiedNoCommits(t *testing.T) {
+	newRepo(t) // isolated git config only
+	dir := t.TempDir()
+	git(t, dir, "init", "--quiet")
+	write(t, dir, "a.meta.toml")
+	git(t, dir, "add", ".")
+	got, err := Modified(t.Context(), dir)
+	if err != nil || got != nil {
+		t.Errorf("Modified = %q, %v; want nothing", got, err)
+	}
+}
+
+func TestModifiedNotARepo(t *testing.T) {
+	newRepo(t) // isolated git config only
+	_, err := Modified(t.Context(), t.TempDir())
+	const want = "not a git repository"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err = %v, want a not-a-repository error", err)
+	}
+}
