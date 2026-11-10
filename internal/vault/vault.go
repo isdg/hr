@@ -178,6 +178,12 @@ func (v *Vault) MetaDir() string {
 	return filepath.Join(v.Root, ".hr")
 }
 
+// HistoryPath is the log of opened articles behind `hr recent`. Unlike
+// the rest of MetaDir it is not regenerable: deleting it loses history.
+func (v *Vault) HistoryPath() string {
+	return filepath.Join(v.MetaDir(), "history.jsonl")
+}
+
 func (v *Vault) CachePath() string {
 	return filepath.Join(v.MetaDir(), "cache.json")
 }
