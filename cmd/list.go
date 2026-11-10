@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -126,9 +127,9 @@ func publishedDate(it listing.Item) string {
 
 func printTSV(items []listing.Item) error {
 	for _, it := range items {
-		// Group is appended, not inserted: existing consumers index
-		// fields 1-6 and must keep working.
-		fmt.Printf("%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+		// Group and Opened are appended, not inserted: existing
+		// consumers index fields 1-6 and must keep working.
+		fmt.Printf("%s\t%s\t%s\t%s\t%s\t%s\t%s",
 			it.Path,
 			it.Feed,
 			it.Published.Format("2006-01-02"),
@@ -137,6 +138,10 @@ func printTSV(items []listing.Item) error {
 			tabSafe(it.Label()),
 			it.Group,
 		)
+		if it.Opened != nil {
+			fmt.Printf("\t%s", it.Opened.Format(time.RFC3339))
+		}
+		fmt.Println()
 	}
 	return nil
 }

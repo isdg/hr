@@ -18,6 +18,9 @@ COMMANDS
     hr groups                 folders under feeds/ + feed/article/unread
                               counts
     hr list                   list articles (pretty, --tsv, --json)
+    hr recent                 articles you opened, latest first (takes
+                              hr list's flags; --since = opened within)
+    hr opened <path>...       record an open (hr.vim runs it on load)
     hr read <path>...         mark as read (sidecar mutation)
     hr unread <path>...
     hr fav <path>...          toggle favorite
@@ -41,6 +44,9 @@ VAULT LAYOUT
                                                   feed name
         err.txt                                   one line per error during
                                                   sync
+        history.jsonl                             one line per open, for
+                                                  hr recent; NOT
+                                                  regenerable
     ~/.hrrc                                       global default vault:
                                                   vault = "..." (set/read
                                                   via hr use), plus your
