@@ -167,7 +167,9 @@ COMMITTING WHAT SYNC FETCHED
 -------------------------------------------------------------------------------
 
 With autocommit = true in hr.toml, hr sync commits the articles and
-sidecars it just wrote to the git repository holding the vault:
+sidecars it just wrote to the git repository holding the vault, along with
+any already-tracked sidecar changed since the last commit (read state,
+favorites, aliases set by hr read, hr fav, the nvim panel):
 
     sync: 9 new articles
 
@@ -175,13 +177,19 @@ sidecars it just wrote to the git repository holding the vault:
     bun       +2
     lwn       +2
 
-Only those files go in. Anything else you have staged or modified is left
-alone, and nothing is pushed. hr sync --commit or --commit=false overrides
-the setting for one run.
+    update 3 sidecars
+
+With no new articles, only changed sidecars, the commit is
+"sync: update 3 sidecars".
+
+Only those files go in. Anything else you have staged or modified, edited
+article bodies included, is left alone, and nothing is pushed.
+hr sync --commit or --commit=false overrides the setting for one run.
 
 A failed commit (a hook rejecting it, say) fails the sync but keeps the
 articles on disk. Later syncs won't pick them up, since they only commit
-what they themselves write, so commit those by hand.
+what they themselves write, so commit those by hand. Changed sidecars are
+picked up by the next sync either way.
 
 -------------------------------------------------------------------------------
 WHICH VAULT DOES HR USE?

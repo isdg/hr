@@ -15,10 +15,10 @@ func (r *Result) Written() []string {
 	return paths
 }
 
-// CommitMessage describes the run's writes for a vault commit: the new
-// article count as the subject, then each feed that gained any, most
-// first.
-func (r *Result) CommitMessage() string {
+// CommitMessage describes a vault commit of the run's writes plus updated
+// pre-existing sidecars (read state and the like). The subject names the
+// first of new articles, missing sidecars, updates that applies.
+func (r *Result) CommitMessage(updated int) string {
 	var feeds []FeedResult
 	var total, nameW int
 	for _, fr := range r.Feeds {
@@ -28,11 +28,6 @@ func (r *Result) CommitMessage() string {
 			nameW = max(nameW, len(fr.Name))
 		}
 	}
-	if total == 0 {
-		// Only sidecars for articles already on disk were written.
-		return fmt.Sprintf("sync: add %s",
-			count(len(r.Written()), "missing sidecar"))
-	}
 	sort.SliceStable(feeds, func(i, j int) bool {
 		if feeds[i].New != feeds[j].New {
 			return feeds[i].New > feeds[j].New
@@ -40,12 +35,28 @@ func (r *Result) CommitMessage() string {
 		return feeds[i].Name < feeds[j].Name
 	})
 
-	var b strings.Builder
-	fmt.Fprintf(&b, "sync: %s\n\n", count(total, "new article"))
-	for _, fr := range feeds {
-		fmt.Fprintf(&b, "%-*s  +%d\n", nameW, fr.Name, fr.New)
+	state := "update " + count(updated, "sidecar")
+
+	var subject string
+	var body []string
+	switch written := len(r.Written()); {
+	case total > 0:
+		subject = "sync: " + count(total, "new article")
+		var b strings.Builder
+		for _, fr := range feeds {
+			fmt.Fprintf(&b, "%-*s  +%d\n", nameW, fr.Name, fr.New)
+		}
+		body = append(body, strings.TrimSuffix(b.String(), "\n"))
+	case written > 0:
+		// Only sidecars for articles already on disk were written.
+		subject = "sync: add " + count(written, "missing sidecar")
+	default:
+		return "sync: " + state
 	}
-	return strings.TrimSuffix(b.String(), "\n")
+	if updated > 0 {
+		body = append(body, state)
+	}
+	return strings.Join(append([]string{subject}, body...), "\n\n")
 }
 
 func count(n int, noun string) string {

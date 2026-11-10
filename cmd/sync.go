@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -86,19 +88,45 @@ var syncCmd = &cobra.Command{
 	},
 }
 
-// commitSync commits the files the sync wrote, if any, and reports it.
+// commitSync commits the files the sync wrote and the sidecars changed
+// since the last commit (read state, favorites, aliases), and reports it.
 func commitSync(cmd *cobra.Command, v *vault.Vault, res *syncer.Result) error {
+	ctx := cmd.Context()
 	paths := res.Written()
-	if len(paths) == 0 {
+	updated, err := changedSidecars(ctx, v, paths)
+	if err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+	if len(paths)+len(updated) == 0 {
 		return nil
 	}
-	msg := res.CommitMessage()
-	if err := git.Commit(cmd.Context(), v.Root, msg, paths); err != nil {
+	msg := res.CommitMessage(len(updated))
+	err = git.Commit(ctx, v.Root, msg, append(paths, updated...))
+	if err != nil {
 		return fmt.Errorf("commit: %w", err)
 	}
 	subject, _, _ := strings.Cut(msg, "\n")
 	fmt.Printf("  committed: %s\n", subject)
 	return nil
+}
+
+// changedSidecars returns the vault's tracked sidecars modified since the
+// last commit, leaving out any the sync itself wrote.
+func changedSidecars(
+	ctx context.Context, v *vault.Vault, written []string,
+) ([]string, error) {
+	modified, err := git.Modified(ctx, v.FeedsDir())
+	if err != nil {
+		return nil, err
+	}
+	var sidecars []string
+	for _, p := range modified {
+		if strings.HasSuffix(p, ".meta.toml") &&
+			!slices.Contains(written, p) {
+			sidecars = append(sidecars, p)
+		}
+	}
+	return sidecars, nil
 }
 
 // feedLayout returns the widest selected feed name and how many feeds are
@@ -238,6 +266,7 @@ func init() {
 	syncCmd.Flags().IntVarP(&syncJobs, "jobs", "j", 0,
 		"number of feeds to fetch in parallel (0 = default)")
 	syncCmd.Flags().BoolVar(&syncCommit, "commit", false,
-		"commit new articles to git (default: autocommit in hr.toml)")
+		"commit new articles and changed sidecars to git "+
+			"(default: autocommit in hr.toml)")
 	rootCmd.AddCommand(syncCmd)
 }

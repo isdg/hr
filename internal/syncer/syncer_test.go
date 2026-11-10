@@ -424,26 +424,38 @@ func TestCommitMessage(t *testing.T) {
 		{Name: "lobsters", New: 5, Written: make([]string, 10)},
 		{Name: "bun", New: 2, Written: make([]string, 4)},
 	}}
-	want := "sync: 9 new articles\n\n" +
-		"lobsters  +5\n" +
-		"bun       +2\n" +
-		"lwn       +2"
-	if got := r.CommitMessage(); got != want {
-		t.Errorf("got\n%s\nwant\n%s", got, want)
-	}
-
-	one := &Result{Feeds: []FeedResult{
-		{Name: "go", New: 1, Written: make([]string, 2)},
-	}}
-	if got := one.CommitMessage(); got != "sync: 1 new article\n\ngo  +1" {
-		t.Errorf("got %q", got)
-	}
-
 	sidecars := &Result{Feeds: []FeedResult{
 		{Name: "go", Written: make([]string, 3)},
 	}}
-	want = "sync: add 3 missing sidecars"
-	if got := sidecars.CommitMessage(); got != want {
-		t.Errorf("got %q, want %q", got, want)
+	tests := []struct {
+		name    string
+		r       *Result
+		updated int
+		want    string
+	}{
+		{"articles", r, 0, "sync: 9 new articles\n\n" +
+			"lobsters  +5\n" +
+			"bun       +2\n" +
+			"lwn       +2"},
+		{"one article", &Result{Feeds: []FeedResult{
+			{Name: "go", New: 1, Written: make([]string, 2)},
+		}}, 0, "sync: 1 new article\n\ngo  +1"},
+		{"missing sidecars", sidecars, 0,
+			"sync: add 3 missing sidecars"},
+		{"articles and state", r, 2, "sync: 9 new articles\n\n" +
+			"lobsters  +5\n" +
+			"bun       +2\n" +
+			"lwn       +2\n\n" +
+			"update 2 sidecars"},
+		{"missing sidecars and state", sidecars, 1,
+			"sync: add 3 missing sidecars\n\nupdate 1 sidecar"},
+		{"state only", &Result{}, 4, "sync: update 4 sidecars"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.r.CommitMessage(tt.updated); got != tt.want {
+				t.Errorf("got\n%s\nwant\n%s", got, tt.want)
+			}
+		})
 	}
 }

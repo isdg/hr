@@ -9,8 +9,9 @@ ordering = "desc"
 # Mark items read when their file is opened (requires nvim autocmd).
 autoread = false
 
-# Commit the articles each `hr sync` writes, and nothing else, to the
-# git repository holding the vault. `hr sync --commit[=false]` overrides.
+# Commit the articles each `hr sync` writes, plus sidecars changed since
+# the last commit (read state), and nothing else, to the git repository
+# holding the vault. `hr sync --commit[=false]` overrides.
 autocommit = false
 
 # User-Agent for HTTP requests.

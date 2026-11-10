@@ -28,8 +28,9 @@ type Settings struct {
 	Ordering  string `toml:"ordering"`
 	UserAgent string `toml:"user_agent"`
 
-	// AutoCommit makes `hr sync` commit the files it writes to the git
-	// repository holding the vault.
+	// AutoCommit makes `hr sync` commit the files it writes, and the
+	// sidecars changed since the last commit, to the git repository
+	// holding the vault.
 	AutoCommit bool `toml:"autocommit"`
 }
 
