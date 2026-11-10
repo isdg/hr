@@ -11,17 +11,23 @@ import (
 	"github.com/isdg/hr/internal/listing"
 )
 
+// listFlags is the filter and output vocabulary shared by `hr list` and
+// `hr recent`, so hr.vim and the shell pickers can forward either.
+type listFlags struct {
+	unread    bool
+	feeds     []string
+	groups    []string
+	tag       string
+	since     string
+	corrupted bool
+	tsv       bool
+	json      bool
+}
+
 var (
-	listUnread    bool
-	listFeeds     []string
-	listGroups    []string
-	listTag       string
-	listSince     string
-	listCorrupted bool
-	feedGroups    []string
-	feedFeeds     []string
-	listTSV       bool
-	listJSON      bool
+	listOpts   listFlags
+	feedGroups []string
+	feedFeeds  []string
 )
 
 var listCmd = &cobra.Command{
@@ -32,7 +38,7 @@ var listCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		f, err := buildListFilter()
+		f, err := listOpts.filter()
 		if err != nil {
 			return err
 		}
@@ -40,14 +46,7 @@ var listCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		switch {
-		case listJSON:
-			return printJSON(items)
-		case listTSV:
-			return printTSV(items)
-		default:
-			return printPretty(items)
-		}
+		return listOpts.print(items, publishedDate)
 	},
 }
 
@@ -71,22 +70,58 @@ var feedCmd = &cobra.Command{
 	},
 }
 
-func buildListFilter() (listing.Filter, error) {
+func (lf *listFlags) register(c *cobra.Command, sinceHelp string) {
+	fl := c.Flags()
+	fl.BoolVar(&lf.unread, "unread", false, "only unread items")
+	fl.StringSliceVar(&lf.feeds, "feed", nil,
+		"filter to a feed (repeatable; exact name match)")
+	fl.StringSliceVar(&lf.groups, "group", nil,
+		"filter to a folder under feeds/ "+
+			"(repeatable; subtree match; \"/\" = top level only)")
+	fl.StringVar(&lf.tag, "tag", "", "filter by tag")
+	fl.StringVar(&lf.since, "since", "", sinceHelp)
+	fl.BoolVar(&lf.corrupted, "corrupted", false,
+		"only items with corruption marks")
+	fl.BoolVar(&lf.tsv, "tsv", false,
+		"tab-separated output (machine-friendly)")
+	fl.BoolVar(&lf.json, "json", false, "JSON output")
+}
+
+func (lf *listFlags) filter() (listing.Filter, error) {
 	f := listing.Filter{
-		Feeds:     listFeeds,
-		Groups:    listGroups,
-		Tag:       listTag,
-		Unread:    listUnread,
-		Corrupted: listCorrupted,
+		Feeds:     lf.feeds,
+		Groups:    lf.groups,
+		Tag:       lf.tag,
+		Unread:    lf.unread,
+		Corrupted: lf.corrupted,
 	}
-	if listSince != "" {
-		d, err := listing.ParseSince(listSince)
+	if lf.since != "" {
+		d, err := listing.ParseSince(lf.since)
 		if err != nil {
 			return f, fmt.Errorf("invalid --since: %w", err)
 		}
 		f.Since = d
 	}
 	return f, nil
+}
+
+// dateFunc picks the time the human-readable listing shows per item.
+type dateFunc func(listing.Item) string
+
+// print writes items in the chosen format.
+func (lf *listFlags) print(items []listing.Item, date dateFunc) error {
+	switch {
+	case lf.json:
+		return printJSON(items)
+	case lf.tsv:
+		return printTSV(items)
+	default:
+		return printPretty(items, date)
+	}
+}
+
+func publishedDate(it listing.Item) string {
+	return it.Published.Format("2006-01-02")
 }
 
 func printTSV(items []listing.Item) error {
@@ -125,7 +160,7 @@ func printJSON(items []listing.Item) error {
 	return enc.Encode(items)
 }
 
-func printPretty(items []listing.Item) error {
+func printPretty(items []listing.Item, date dateFunc) error {
 	if len(items) == 0 {
 		fmt.Println("(no articles)")
 		return nil
@@ -148,7 +183,7 @@ func printPretty(items []listing.Item) error {
 			stateChar(it.Read, "R"),
 			stateChar(it.Favorite, "F"),
 			stateChar(it.Corrupt > 0, "C"),
-			it.Published.Format("2006-01-02"),
+			date(it),
 			feedW, feed,
 			it.Label(),
 		)
@@ -164,22 +199,7 @@ func stateChar(set bool, ch string) string {
 }
 
 func init() {
-	listCmd.Flags().BoolVar(&listUnread, "unread", false,
-		"only unread items")
-	listCmd.Flags().StringSliceVar(&listFeeds, "feed", nil,
-		"filter to a feed (repeatable; exact name match)")
-	listCmd.Flags().StringSliceVar(&listGroups, "group", nil,
-		"filter to a folder under feeds/ (repeatable; subtree match; \"/\" = top level only)")
-	listCmd.Flags().StringVar(&listTag, "tag", "",
-		"filter by tag")
-	listCmd.Flags().StringVar(&listSince, "since", "",
-		"only items newer than (e.g. 7d, 24h)")
-	listCmd.Flags().BoolVar(&listCorrupted, "corrupted", false,
-		"only items with corruption marks")
-	listCmd.Flags().BoolVar(&listTSV, "tsv", false,
-		"tab-separated output (machine-friendly)")
-	listCmd.Flags().BoolVar(&listJSON, "json", false,
-		"JSON output")
+	listOpts.register(listCmd, "only items newer than (e.g. 7d, 24h)")
 	feedCmd.Flags().StringSliceVar(&feedGroups, "group", nil,
 		"filter to a folder under feeds/ (repeatable; subtree match)")
 	feedCmd.Flags().StringSliceVar(&feedFeeds, "feed", nil,
