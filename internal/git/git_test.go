@@ -160,7 +160,8 @@ func TestModified(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{edited, staged}; !slices.Equal(got, want) {
+	want := []string{edited, staged, gone}
+	if !slices.Equal(got, want) {
 		t.Errorf("Modified = %q, want %q", got, want)
 	}
 }
@@ -183,5 +184,24 @@ func TestModifiedNotARepo(t *testing.T) {
 	const want = "not a git repository"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err = %v, want a not-a-repository error", err)
+	}
+}
+
+func TestCommitDeletedPath(t *testing.T) {
+	dir := newRepo(t)
+	p := write(t, dir, "feeds/x/a.meta.toml")
+	git(t, dir, "add", ".")
+	git(t, dir, "commit", "--quiet", "-m", "sidecar")
+	if err := os.Remove(p); err != nil {
+		t.Fatal(err)
+	}
+	if err := Commit(t.Context(), dir, "x", []string{p}); err != nil {
+		t.Fatal(err)
+	}
+	if got := git(t, dir, "ls-files", "feeds"); got != "" {
+		t.Errorf("still tracked: %q", got)
+	}
+	if got := git(t, dir, "status", "--porcelain"); got != "" {
+		t.Errorf("deletion left uncommitted:\n%s", got)
 	}
 }

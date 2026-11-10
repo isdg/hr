@@ -111,8 +111,8 @@ func commitSync(cmd *cobra.Command, v *vault.Vault, res *syncer.Result) error {
 	return nil
 }
 
-// changedSidecars returns the vault's tracked sidecars modified since the
-// last commit, leaving out any the sync itself wrote.
+// changedSidecars returns the vault's tracked sidecars changed or deleted
+// since the last commit, leaving out any the sync itself wrote.
 func changedSidecars(
 	ctx context.Context, v *vault.Vault, written []string,
 ) ([]string, error) {

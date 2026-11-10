@@ -37,14 +37,14 @@ func Commit(ctx context.Context, dir, msg string, paths []string) error {
 }
 
 // Modified returns the tracked files under dir whose content differs from
-// HEAD, staged or not, as absolute paths. Before the first commit nothing
-// is tracked, so nothing is modified.
+// HEAD or that were deleted, staged or not, as absolute paths. Before the
+// first commit nothing is tracked, so nothing is modified.
 func Modified(ctx context.Context, dir string) ([]string, error) {
 	if ok, err := hasHead(ctx, dir); !ok || err != nil {
 		return nil, err
 	}
 	out, err := run(ctx, dir, nil, "diff", "--name-only", "-z",
-		"--diff-filter=M", "--relative", "HEAD", "--", ".")
+		"--diff-filter=MD", "--relative", "HEAD", "--", ".")
 	if err != nil {
 		return nil, err
 	}
