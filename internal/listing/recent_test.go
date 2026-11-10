@@ -53,6 +53,9 @@ func TestRecentOrdersByLastOpen(t *testing.T) {
 	for _, it := range items {
 		if it.Opened == nil {
 			t.Errorf("%s has no Opened time", it.Title)
+		} else if it.Opened.Location() != time.Local {
+			t.Errorf("%s opened in %v, want local time",
+				it.Title, it.Opened.Location())
 		}
 	}
 	if age := time.Since(*items[0].Opened); age < 0 || age > time.Hour {

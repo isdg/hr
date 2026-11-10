@@ -11,6 +11,7 @@ import (
 
 // Recent lists the opened articles matching f, most recently opened
 // first. Here f.Since bounds the open time, not the publication date.
+// Open times are local, so consumers can show them without converting.
 func Recent(v *vault.Vault, f Filter, hist []history.Entry) ([]Item, error) {
 	latest := history.Latest(hist)
 	if len(latest) == 0 {
@@ -33,7 +34,8 @@ func Recent(v *vault.Vault, f Filter, hist []history.Entry) ([]Item, error) {
 		if since > 0 && at.Before(now.Add(-since)) {
 			continue
 		}
-		it.Opened = &at
+		local := at.Local()
+		it.Opened = &local
 		items = append(items, it)
 	}
 
