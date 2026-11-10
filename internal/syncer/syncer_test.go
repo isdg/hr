@@ -54,7 +54,7 @@ func fmtFeed(w http.ResponseWriter, name string) {
 
 func newVault(t *testing.T) *vault.Vault {
 	t.Helper()
-	v := &vault.Vault{Root: t.TempDir()}
+	v := &vault.Vault{Root: t.TempDir(), State: t.TempDir()}
 	for _, d := range []string{v.FeedsDir(), v.MetaDir()} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			t.Fatalf("mkdir %s: %v", d, err)

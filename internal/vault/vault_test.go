@@ -3,6 +3,7 @@ package vault
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/isdg/hr/internal/config"
@@ -82,5 +83,101 @@ func TestDefaultConfigSettingsAreTopLevel(t *testing.T) {
 	}
 	if cfg.Ordering != "desc" || cfg.UserAgent != "hr/0.1" {
 		t.Errorf("settings not applied: %+v", cfg)
+	}
+}
+
+func mkVault(t *testing.T, name string) string {
+	t.Helper()
+	root := filepath.Join(t.TempDir(), "v")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := []byte("name = '" + name + "'\n") // literal: no escapes
+	err := os.WriteFile(filepath.Join(root, "hr.toml"), cfg, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+// A vault's state lives under the hr home, named after the vault, so
+// nothing machine-local sits in the vault's repository.
+func TestOpenStateUnderHome(t *testing.T) {
+	t.Setenv("HR_HOME", t.TempDir())
+	v, err := Open(mkVault(t, "blog"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(os.Getenv("HR_HOME"), "blog")
+	if v.State != want {
+		t.Errorf("State = %q, want %q", v.State, want)
+	}
+	for _, p := range []string{v.HistoryPath(), v.CachePath(),
+		v.IndexPath(), v.RawDir(), v.LogDir()} {
+		if !strings.HasPrefix(p, want+string(filepath.Separator)) {
+			t.Errorf("%s is outside the state dir", p)
+		}
+	}
+}
+
+func TestOpenRejectsUnusableNames(t *testing.T) {
+	t.Setenv("HR_HOME", t.TempDir())
+	for _, name := range []string{"", ".", "..", "a/b", `a\b`,
+		"config.toml"} {
+		if _, err := Open(mkVault(t, name)); err == nil {
+			t.Errorf("Open(name %q) succeeded, want an error", name)
+		}
+	}
+}
+
+// The old in-repo .hr/ moves to the state dir once; if the state dir
+// already exists, the old one stays put for doctor to report.
+func TestOpenAdoptsLegacyState(t *testing.T) {
+	t.Setenv("HR_HOME", t.TempDir())
+	root := mkVault(t, "blog")
+	old := filepath.Join(root, ".hr", "history.jsonl")
+	if err := os.MkdirAll(filepath.Dir(old), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(old, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	v, err := Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(v.HistoryPath()); err != nil {
+		t.Errorf("history not moved: %v", err)
+	}
+	if _, err := os.Stat(v.LegacyStateDir()); !os.IsNotExist(err) {
+		t.Errorf("legacy .hr still there: %v", err)
+	}
+
+	if err := os.MkdirAll(v.LegacyStateDir(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(v.LegacyStateDir()); err != nil {
+		t.Errorf("second legacy .hr was moved over existing state: %v",
+			err)
+	}
+}
+
+func TestInitRefusesTakenName(t *testing.T) {
+	t.Setenv("HR_HOME", t.TempDir())
+	v, err := Init(filepath.Join(t.TempDir(), "a"), "blog")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(v.State); err != nil {
+		t.Errorf("Init made no state dir: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(v.Root, ".gitignore")); err == nil {
+		t.Error("Init still writes a .gitignore for an in-repo .hr/")
+	}
+	if _, err := Init(filepath.Join(t.TempDir(), "b"), "blog"); err == nil {
+		t.Error("second vault named blog shares the first's state")
 	}
 }

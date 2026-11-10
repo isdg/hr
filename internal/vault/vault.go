@@ -4,10 +4,13 @@ package vault
 
 import (
 	_ "embed"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/BurntSushi/toml"
 
 	"github.com/isdg/hr/internal/rc"
 )
@@ -17,11 +20,15 @@ var defaultConfig []byte
 
 type Vault struct {
 	Root string
+	// State is this machine's state for the vault (caches, raw HTML,
+	// logs, open history), kept out of the vault so its repository only
+	// carries content. Open and Init set it to ~/.hr/<name>.
+	State string
 }
 
 // Resolve returns the absolute root of the active vault for operating
 // commands. Priority: explicit (flag) > $HR_VAULT > discovered from the
-// current directory (walking up for hr.toml, like `.git`) > ~/.hrrc.
+// current directory (walking up for hr.toml, like `.git`) > ~/.hr/config.toml.
 func Resolve(explicit string) (string, error) {
 	raw := explicit
 	if raw == "" {
@@ -51,7 +58,7 @@ func Resolve(explicit string) (string, error) {
 
 // Discover walks up from dir looking for an hr.toml, the way `git`
 // discovers a repo root from `.git`. It lets a cloned vault work as
-// soon as you `cd` into it (or a subdirectory of it), with no ~/.hrrc
+// soon as you `cd` into it (or a subdirectory of it), with no ~/.hr/config.toml
 // or $HR_VAULT needed. Returns the vault root and whether one was found.
 func Discover(dir string) (string, bool) {
 	dir, err := filepath.Abs(dir)
@@ -72,7 +79,7 @@ func Discover(dir string) (string, bool) {
 
 // ResolveNew returns the absolute path for a vault about to be
 // created. Priority: explicit > $HR_VAULT > ~/blogs/<name>. Never
-// reads ~/.hrrc.
+// reads ~/.hr/config.toml.
 func ResolveNew(explicit, name string) (string, error) {
 	raw := explicit
 	if raw == "" {
@@ -115,11 +122,72 @@ func Open(root string) (*Vault, error) {
 		}
 		return nil, err
 	}
+	var cfg struct {
+		Name string `toml:"name"`
+	}
+	if _, err := toml.DecodeFile(v.ConfigPath(), &cfg); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", v.ConfigPath(), err)
+	}
+	state, err := StateDir(cfg.Name)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", v.ConfigPath(), err)
+	}
+	v.State = state
+	if err := adoptLegacyState(v); err != nil {
+		return nil, err
+	}
 	return v, nil
 }
 
+// StateDir returns where a vault named name keeps its state on this
+// machine. The name must be unique among the machine's vaults.
+func StateDir(name string) (string, error) {
+	if name == "" || name == "." || name == ".." ||
+		strings.ContainsAny(name, `/\`) || name == "config.toml" {
+		return "", fmt.Errorf("vault name %q cannot name a directory "+
+			"under the hr home", name)
+	}
+	home, err := rc.Home()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, name), nil
+}
+
+// LegacyStateDir is where hr kept a vault's state before ~/.hr.
+func (v *Vault) LegacyStateDir() string {
+	return filepath.Join(v.Root, ".hr")
+}
+
+// adoptLegacyState moves a vault's old in-repo .hr/ to its state dir,
+// once. When both exist the old one is left for doctor to report.
+func adoptLegacyState(v *Vault) error {
+	legacy := v.LegacyStateDir()
+	if _, err := os.Stat(legacy); errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if _, err := os.Stat(v.State); err == nil {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(v.State), 0o755); err != nil {
+		return err
+	}
+	if err := os.Rename(legacy, v.State); err != nil {
+		return fmt.Errorf("move %s to %s: %w", legacy, v.State, err)
+	}
+	return nil
+}
+
 func Init(root, name string) (*Vault, error) {
-	v := &Vault{Root: root}
+	state, err := StateDir(name)
+	if err != nil {
+		return nil, err
+	}
+	v := &Vault{Root: root, State: state}
+	if _, err := os.Stat(state); err == nil {
+		return nil, fmt.Errorf("a vault named %q already keeps its "+
+			"state in %s; pick another name", name, state)
+	}
 
 	if _, err := os.Stat(v.ConfigPath()); err == nil {
 		return nil, fmt.Errorf(
@@ -133,15 +201,9 @@ func Init(root, name string) (*Vault, error) {
 		}
 	}
 
-	err := os.WriteFile(v.ConfigPath(), buildConfig(name), 0o644)
+	err = os.WriteFile(v.ConfigPath(), buildConfig(name), 0o644)
 	if err != nil {
 		return nil, fmt.Errorf("write config: %w", err)
-	}
-
-	gitignore := filepath.Join(v.Root, ".gitignore")
-	err = os.WriteFile(gitignore, []byte(".hr/\n"), 0o644)
-	if err != nil {
-		return nil, fmt.Errorf("write .gitignore: %w", err)
 	}
 
 	if err := rc.SetVault(v.Root); err != nil {
@@ -175,7 +237,10 @@ func (v *Vault) Rel(p string) string {
 }
 
 func (v *Vault) MetaDir() string {
-	return filepath.Join(v.Root, ".hr")
+	if v.State == "" {
+		panic("vault: State unset; get the Vault from Open or Init")
+	}
+	return v.State
 }
 
 // HistoryPath is the log of opened articles behind `hr recent`. Unlike

@@ -64,7 +64,7 @@ func Check(v *vault.Vault, cfg *config.Config) (Report, error) {
 	}
 
 	feedNames := checkConfig(cfg, add)
-	checkGitignore(v, add)
+	checkLegacyState(v, add)
 
 	// Feed directories may be grouped under feeds/ at any depth, so ask
 	// the vault where they are rather than assuming one flat level.
@@ -161,12 +161,14 @@ func checkConfig(cfg *config.Config, add addFunc) map[string]bool {
 	return names
 }
 
-func checkGitignore(v *vault.Vault, add addFunc) {
-	data, err := os.ReadFile(filepath.Join(v.Root, ".gitignore"))
-	if err != nil || !strings.Contains(string(data), ".hr/") {
-		add(Warn, ".gitignore",
-			`missing ".hr/" entry — cache/raw HTML archive may get committed`)
+// checkLegacyState reports an in-repo .hr/ that Open could not move to
+// the vault's state dir because one already existed there.
+func checkLegacyState(v *vault.Vault, add addFunc) {
+	if _, err := os.Stat(v.LegacyStateDir()); err != nil {
+		return
 	}
+	add(Warn, ".hr", "no longer read: state lives in %s; merge what you "+
+		"need from it (history.jsonl) and delete it", v.State)
 }
 
 // checkFeedDir inspects one feed directory. relDir is its vault-relative

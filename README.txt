@@ -11,7 +11,8 @@ COMMANDS
 -------------------------------------------------------------------------------
 
     hr init <name> [dir]      scaffold a vault
-    hr use [dir]              set/show the global default vault (~/.hrrc)
+    hr use [dir]              set/show the global default vault
+                              (~/.hr/config.toml)
     hr doctor                 check the vault for inconsistencies
     hr sync                   fetch feeds, write articles + sidecars
     hr mv <feed>... <group>   move feed folders into a group under feeds/
@@ -37,9 +38,18 @@ VAULT LAYOUT
       hr.toml                                     config (committed)
       feeds/<feed>/<date>-<slug>-<id>.md          article content (committed)
       feeds/<feed>/<date>-<slug>-<id>.meta.toml   mutable state (committed)
-      .hr/                                        gitignored
+
+    ~/.hr/ ($HR_HOME)                             this machine's, outside
+                                                  every vault
+      config.toml                                 global default vault:
+                                                  vault = "..." (set/read
+                                                  via hr use), plus your
+                                                  settings for every vault
+      <name>/                                     one per vault, by the
+                                                  name in its hr.toml
         cache.json                                ETag / Last-Modified per
                                                   feed
+        index.json                                listing cache
         raw/<feed>/<date>-<slug>-<id>.html        original HTML, keyed by
                                                   feed name
         err.txt                                   one line per error during
@@ -47,10 +57,11 @@ VAULT LAYOUT
         history.jsonl                             one line per open, for
                                                   hr recent; NOT
                                                   regenerable
-    ~/.hrrc                                       global default vault:
-                                                  vault = "..." (set/read
-                                                  via hr use), plus your
-                                                  settings for every vault
+
+Vault names must be unique on a machine: hr init refuses a name whose
+state directory exists. Older hr kept the per-vault state in <vault>/.hr/
+and ~/.hrrc; both move into ~/.hr on first use, and hr doctor reports a
+<vault>/.hr/ it could not move.
 
 The <id> segment is the first 8 hex chars of sha1(GUID || URL || title), so
 the same item lands on the same path across machines.
@@ -137,8 +148,8 @@ with no directory yet gets created on its first sync.
 
 Once the directory exists, its location on disk wins over group.
 
-.hr/raw/<feed>/ stays flat, keyed by feed name — it's a gitignored cache,
-so moving a feed never has to touch it.
+~/.hr/<name>/raw/<feed>/ stays flat, keyed by feed name — it's a local
+cache, so moving a feed never has to touch it.
 
 -------------------------------------------------------------------------------
 HAND-CURATED FEEDS
@@ -203,7 +214,8 @@ WHICH VAULT DOES HR USE?
 
 Resolved in priority order: -C <dir> flag > $HR_VAULT > walking up from the
 current directory for an hr.toml (like git finds .git, so a cloned vault
-works as soon as you cd into it) > the global default in ~/.hrrc (hr use
+works as soon as you cd into it) > the global default in ~/.hr/config.toml
+(hr use
 <dir> to set it, hr use to show it, hr use --clear to unset it).
 
 hr doctor checks a vault's hr.toml and feed directories for inconsistencies
@@ -215,18 +227,19 @@ YOUR SETTINGS AND THE VAULT'S
 -------------------------------------------------------------------------------
 
 ordering, autoread, showread, user_agent and autocommit can be set in
-~/.hrrc as your defaults for every vault, or in a vault's hr.toml for that
-vault alone. A key the vault sets wins, even when it sets false; a key it
-leaves out keeps your value:
+~/.hr/config.toml as your defaults for every vault, or in a vault's
+hr.toml for that vault alone. A key the vault sets wins, even when it
+sets false; a key it leaves out keeps your value:
 
-    # ~/.hrrc
+    # ~/.hr/config.toml
     vault = "~/feed"
     ordering = "desc"
     user_agent = "hrb/0.1"
 
 In hr.toml they must sit above the first [[feeds]]: TOML gives a key below
 that header to the feed, and hr doctor flags it. hr use and hr init change
-only the vault line of ~/.hrrc, so your settings and comments are kept.
+only the vault line of ~/.hr/config.toml, so your settings and comments
+are kept.
 
 -------------------------------------------------------------------------------
 STORAGE DESIGN
@@ -243,7 +256,7 @@ STORAGE DESIGN
     grep/find/fd.
   - Git is the sync layer. Commit the vault, push, pull on another machine;
     hr reads it without any cross-machine state.
-  - Raw HTML archive. <vault>/.hr/raw/<id>.html keeps the original feed
+  - Raw HTML archive. ~/.hr/<name>/raw/<id>.html keeps the original feed
     body. If a future conversion bug or readability improvement warrants
     reprocessing, the source is local.
 
@@ -294,12 +307,14 @@ hr sync is idempotent and never overwrites user-mutable state:
                                                 choose)         exists
     feeds/.../*.meta.toml       first hr sync   hr read/fav/    untouched
                                                 alias, user     after creation
-    .hr/cache.json              hr sync         hr sync         overwritten
+    (in ~/.hr/<name>/)
+    cache.json                  hr sync         hr sync         overwritten
                                                                 each run
-    .hr/raw/<feed>/<name>.html  first hr sync   —               skipped if
+    raw/<feed>/<name>.html      first hr sync   —               skipped if
                                                                 exists
-    .hr/err.txt                 hr sync (on     —               appended
+    err.txt                     hr sync (on     —               appended
                                 error)
+    history.jsonl               hr opened       —               appended
 
 Implications:
 
@@ -310,14 +325,14 @@ Implications:
   - Aliases are committed. They live in .meta.toml, which is in the vault,
     which is in git, so aliases sync to other machines. If you want truly
     machine-local aliases, the design needs to move them to
-    .hr/aliases.json (gitignored). Not done yet.
+    ~/.hr/<name>/aliases.json. Not done yet.
   - Stale content stays stale. If a feed corrects a published item (typo
     fix, retitling), hr keeps the original on disk — same GUID, same hash,
     same path, skipped. To force a fresh copy, delete the .md and
     .meta.toml and run hr sync. A future hr refresh <path> command would do
     this targeted.
   - Cross-machine merge conflicts can only happen on .meta.toml (everything
-    else is either immutable or gitignored). The files are small and
+    else is either immutable or outside the vault). The files are small and
     line-oriented; most conflicts auto-merge. Real collisions need human
     attention via git.
 

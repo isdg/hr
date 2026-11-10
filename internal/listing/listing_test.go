@@ -34,7 +34,7 @@ func mkArticle(t *testing.T, v *vault.Vault, rel, title string, read bool) {
 
 func testVault(t *testing.T) *vault.Vault {
 	t.Helper()
-	v := &vault.Vault{Root: t.TempDir()}
+	v := &vault.Vault{Root: t.TempDir(), State: t.TempDir()}
 	mkArticle(t, v, "lobsters", "flat", false)
 	mkArticle(t, v, "humans/matklad", "nested", false)
 	mkArticle(t, v, "humans/archive/ewd", "deep", true)

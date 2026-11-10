@@ -24,7 +24,7 @@ func mkfeed(t *testing.T, v *Vault, rel string) string {
 
 func newVault(t *testing.T) *Vault {
 	t.Helper()
-	return &Vault{Root: t.TempDir()}
+	return &Vault{Root: t.TempDir(), State: t.TempDir()}
 }
 
 // A feed's directory is found wherever it sits under feeds/, so

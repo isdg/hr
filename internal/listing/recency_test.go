@@ -50,7 +50,7 @@ const day = 24 * time.Hour
 // hours or more, so the real clock in List cannot flake them.
 func recentVault(t *testing.T) *vault.Vault {
 	t.Helper()
-	v := &vault.Vault{Root: t.TempDir()}
+	v := &vault.Vault{Root: t.TempDir(), State: t.TempDir()}
 	mkDated(t, v, "humans/matklad", "future", ago(-2*day))
 	mkDated(t, v, "humans/matklad", "hour", ago(time.Hour))
 	mkDated(t, v, "sites/lobsters", "days3", ago(3*day))
@@ -76,7 +76,7 @@ func TestListNewestFirst(t *testing.T) {
 // Offsets are honoured: a later wall clock in an earlier zone is still
 // the earlier instant.
 func TestListOrdersByInstantNotWallClock(t *testing.T) {
-	v := &vault.Vault{Root: t.TempDir()}
+	v := &vault.Vault{Root: t.TempDir(), State: t.TempDir()}
 	mkDated(t, v, "f", "utc", "2024-05-01T10:00:00Z")
 	mkDated(t, v, "f", "ny", "2024-05-01T08:00:00-04:00")    // 12:00Z
 	mkDated(t, v, "f", "tokyo", "2024-05-01T18:00:00+09:00") // 09:00Z

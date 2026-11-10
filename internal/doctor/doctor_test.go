@@ -2,10 +2,13 @@ package doctor
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
 	"github.com/isdg/hr/internal/config"
+	"github.com/isdg/hr/internal/vault"
 )
 
 func TestCheckConfigUnknownKeys(t *testing.T) {
@@ -24,5 +27,22 @@ func TestCheckConfigUnknownKeys(t *testing.T) {
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("got\n%q\nwant\n%q", got, want)
+	}
+}
+
+func TestCheckLegacyState(t *testing.T) {
+	v := &vault.Vault{Root: t.TempDir(), State: t.TempDir()}
+	var warned bool
+	add := func(Severity, string, string, ...any) { warned = true }
+	checkLegacyState(v, add)
+	if warned {
+		t.Error("warned with no legacy .hr")
+	}
+	if err := os.Mkdir(filepath.Join(v.Root, ".hr"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	checkLegacyState(v, add)
+	if !warned {
+		t.Error("no warning for a leftover .hr in the vault")
 	}
 }

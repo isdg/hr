@@ -61,7 +61,10 @@ func TestRecordOpen(t *testing.T) {
 		}
 	}
 
-	v := &vault.Vault{Root: root}
+	v, err := vault.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	got, err := history.Load(v.HistoryPath())
 	if err != nil {
 		t.Fatal(err)
