@@ -22,8 +22,9 @@ flag, no $HR_VAULT, and the current directory isn't inside a vault
   hr use            print the current global default
   hr use --clear    unset it
 
-This only changes the vault line of ~/.hrrc. It never creates a vault: run 'hr init' for
-that, or clone one and cd into it directly -- no ~/.hrrc needed there.`,
+This only changes the vault line of ~/.hr/config.toml. It never creates
+a vault: run 'hr init' for that, or clone one and cd into it directly --
+no config needed there.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if useClear {

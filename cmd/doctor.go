@@ -38,7 +38,7 @@ error-level issue was found.`,
 		for _, k := range r.Unknown {
 			report.Issues = append(report.Issues, doctor.Issue{
 				Severity: doctor.Warn,
-				Path:     "~/.hrrc",
+				Path:     "~/.hr/config.toml",
 				Message:  fmt.Sprintf("unknown key %q is ignored", k),
 			})
 		}

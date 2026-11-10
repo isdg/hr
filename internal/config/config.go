@@ -21,7 +21,8 @@ type Config struct {
 }
 
 // Settings are the keys a vault's hr.toml shares with the user's
-// ~/.hrrc. A key the vault sets wins; otherwise the ~/.hrrc value holds.
+// ~/.hr/config.toml. A key the vault sets wins; otherwise the user's
+// value holds.
 type Settings struct {
 	AutoRead  bool   `toml:"autoread"`
 	ShowRead  bool   `toml:"showread"`

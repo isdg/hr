@@ -1,5 +1,6 @@
-// Package rc reads and writes ~/.hrrc: the user's pointer to the active
-// hr vault and their own defaults for every vault's settings.
+// Package rc locates hr's home, ~/.hr, and reads and writes its
+// config.toml: the user's pointer to the active hr vault and their own
+// defaults for every vault's settings.
 package rc
 
 import (
@@ -25,12 +26,54 @@ type RC struct {
 	Unknown []string `toml:"-"`
 }
 
-func Path() (string, error) {
+// Home is hr's machine-local directory, outside every vault: $HR_HOME,
+// else ~/.hr. It holds config.toml and one state directory per vault.
+func Home() (string, error) {
+	if h := os.Getenv("HR_HOME"); h != "" {
+		return filepath.Abs(h)
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("locate home directory: %w", err)
 	}
-	return filepath.Join(home, ".hrrc"), nil
+	return filepath.Join(home, ".hr"), nil
+}
+
+// Path returns the config file, first moving a legacy ~/.hrrc into
+// place. An explicit $HR_HOME never adopts ~/.hrrc.
+func Path() (string, error) {
+	home, err := Home()
+	if err != nil {
+		return "", err
+	}
+	path := filepath.Join(home, "config.toml")
+	if os.Getenv("HR_HOME") == "" {
+		if err := adoptLegacy(path); err != nil {
+			return "", err
+		}
+	}
+	return path, nil
+}
+
+func adoptLegacy(path string) error {
+	userHome, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	legacy := filepath.Join(userHome, ".hrrc")
+	if _, err := os.Stat(legacy); err != nil {
+		return nil
+	}
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	if err := os.Rename(legacy, path); err != nil {
+		return fmt.Errorf("move %s to %s: %w", legacy, path, err)
+	}
+	return nil
 }
 
 func Load() (*RC, error) {
@@ -61,7 +104,7 @@ var (
 	tableStart = regexp.MustCompile(`^\s*\[`)
 )
 
-// SetVault points ~/.hrrc at vault, or unsets it when vault is "". It
+// SetVault points the config at vault, or unsets it when vault is "". It
 // edits the text rather than re-encoding the file, so the user's
 // settings and comments survive.
 func SetVault(vault string) error {
@@ -96,6 +139,9 @@ func SetVault(vault string) error {
 	out := strings.Join(lines, "\n")
 	if out != "" {
 		out += "\n"
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
 	}
 	if err := os.WriteFile(path, []byte(out), 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
