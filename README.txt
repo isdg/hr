@@ -14,7 +14,7 @@ COMMANDS
     hr use [dir]              set/show the global default vault
                               (~/.hr/config.toml)
     hr doctor                 check the vault for inconsistencies
-    hr sync                   fetch feeds, write articles + sidecars
+    hr sync                   fetch feeds, write new articles
     hr mv <feed>... <group>   move feed folders into a group under feeds/
     hr groups                 folders under feeds/ + feed/article/unread
                               counts
@@ -37,7 +37,9 @@ VAULT LAYOUT
     <vault>/
       hr.toml                                     config (committed)
       feeds/<feed>/<date>-<slug>-<id>.md          article content (committed)
-      feeds/<feed>/<date>-<slug>-<id>.meta.toml   mutable state (committed)
+      feeds/<feed>/<date>-<slug>-<id>.meta.toml   mutable state (committed;
+                                                  absent while all
+                                                  defaults)
 
     ~/.hr/ ($HR_HOME)                             this machine's, outside
                                                   every vault
@@ -183,10 +185,10 @@ contradictory, since sync skips the feed either way.
 COMMITTING WHAT SYNC FETCHED
 -------------------------------------------------------------------------------
 
-With autocommit = true in hr.toml, hr sync commits the articles and
-sidecars it just wrote to the git repository holding the vault, along with
-any already-tracked sidecar changed since the last commit (read state,
-favorites, aliases set by hr read, hr fav, the nvim panel):
+With autocommit = true in hr.toml, hr sync commits the articles it just
+wrote to the git repository holding the vault, along with any
+already-tracked sidecar changed or deleted since the last commit (read
+state, favorites, aliases set by hr read, hr fav, the nvim panel):
 
     sync: 9 new articles
 
@@ -251,7 +253,9 @@ STORAGE DESIGN
   - Immutable content, mutable state. Article .md files are written once at
     fetch time and never touched again. Per-article state (read, read_at,
     favorite, tags, alias) lives in a sibling .meta.toml that only hr
-    read/unread/fav/alias modifies. Small files, mergeable in git.
+    read/unread/fav/alias modifies. Small files, mergeable in git. An
+    article whose state is all defaults (unread, not a favorite, nothing
+    else) has no sidecar; hr fmt removes any that say only that.
   - No DB lock-in. Migrate the vault by mv. Bulk operations are
     grep/find/fd.
   - Git is the sync layer. Commit the vault, push, pull on another machine;
@@ -272,8 +276,8 @@ KNOWN LIMITATIONS
     forward-compatible (zero values are fine); removing them silently
     orphans data. Bump schema = N if/when this matters.
   - Partial test coverage. Feed-directory resolution, moves, config
-    editing, group filtering, sync and tombstones are covered; sidecar I/O
-    and alias toggling still aren't.
+    editing, group filtering, sync, tombstones and sidecar defaults are
+    covered; alias toggling still isn't.
 
 -------------------------------------------------------------------------------
 FORMATTING
@@ -305,8 +309,9 @@ hr sync is idempotent and never overwrites user-mutable state:
     hr.toml                     hr init         user            untouched
     feeds/.../*.md              first hr sync   user (if they   skipped if
                                                 choose)         exists
-    feeds/.../*.meta.toml       first hr sync   hr read/fav/    untouched
-                                                alias, user     after creation
+    feeds/.../*.meta.toml       hr read/fav/    hr read/fav/    untouched;
+                                alias, corrupt  alias, user     removed when
+                                                                all defaults
     (in ~/.hr/<name>/)
     cache.json                  hr sync         hr sync         overwritten
                                                                 each run
