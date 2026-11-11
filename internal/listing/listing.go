@@ -197,28 +197,32 @@ func (f Filter) matchFeed(it Item) bool {
 }
 
 // matchGroup reports whether an item falls under any of the filter's
-// groups. Groups stack as a union, so --group humans --group sites
-// reads both shelves.
+// groups (see inGroups).
+func (f Filter) matchGroup(it Item) bool { return inGroups(it.Group, f.Groups) }
+
+// inGroups reports whether group falls under any of groups. They stack
+// as a union, so --group humans --group sites reads both shelves; an
+// empty list matches everything.
 //
 // Each match is by subtree, so --group humans also covers the feeds in
 // humans/archive: the folder you name is the shelf you asked for, not
 // one exact level of it.
-func (f Filter) matchGroup(it Item) bool {
-	if len(f.Groups) == 0 {
+func inGroups(group string, groups []string) bool {
+	if len(groups) == 0 {
 		return true
 	}
-	for _, raw := range f.Groups {
+	for _, raw := range groups {
 		g, err := vault.CleanGroup(raw)
 		if err != nil {
 			continue
 		}
 		if g == "" {
-			if it.Group == "" { // an explicit "/" means the feeds root only
+			if group == "" { // an explicit "/" means the feeds root only
 				return true
 			}
 			continue
 		}
-		if it.Group == g || strings.HasPrefix(it.Group, g+"/") {
+		if group == g || strings.HasPrefix(group, g+"/") {
 			return true
 		}
 	}
