@@ -7,22 +7,26 @@ import (
 	"testing"
 )
 
-// home makes a scratch HOME whose ~/.hrrc holds body ("" = no file),
-// with HR_HOME unset, and returns the ~/.hrrc path.
+// home makes a scratch HOME whose ~/.hr/.hrrc holds body ("" = no
+// file), with HR_HOME unset, and returns the .hrrc path.
 func home(t *testing.T, body string) string {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
 	t.Setenv("HR_HOME", "")
-	p := filepath.Join(dir, ".hrrc")
+	p := filepath.Join(dir, ".hr", ".hrrc")
 	if body != "" {
 		writeFile(t, p, body)
 	}
 	return p
 }
 
-// legacy is where an older hr kept the settings in the scratch HOME.
-func legacy() string {
+// userHrrc and configTOML are where older hr kept the settings.
+func userHrrc() string {
+	return filepath.Join(os.Getenv("HOME"), ".hrrc")
+}
+
+func configTOML() string {
 	return filepath.Join(os.Getenv("HOME"), ".hr", "config.toml")
 }
 
@@ -45,8 +49,14 @@ func read(t *testing.T, p string) string {
 	return string(b)
 }
 
+func exists(p string) bool {
+	_, err := os.Lstat(p)
+	return err == nil
+}
+
 func TestLoadSettings(t *testing.T) {
-	home(t, `# who we are to servers
+	home(t, `vault = "~/feed"
+# who we are to servers
 user_agent = "hrb/0.1"
 autoread = true
 colour = "green"
@@ -55,7 +65,7 @@ colour = "green"
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.UserAgent != "hrb/0.1" || !r.AutoRead {
+	if r.Vault != "~/feed" || r.UserAgent != "hrb/0.1" || !r.AutoRead {
 		t.Errorf("Load = %+v", r)
 	}
 	if !slices.Equal(r.Unknown, []string{"colour"}) {
@@ -66,21 +76,8 @@ colour = "green"
 func TestLoadWithoutFile(t *testing.T) {
 	home(t, "")
 	r, err := Load()
-	if err != nil || r.UserAgent != "" || len(r.Unknown) != 0 {
+	if err != nil || r.Vault != "" || len(r.Unknown) != 0 {
 		t.Errorf("Load = %+v, %v; want zero settings", r, err)
-	}
-}
-
-// The vault is the environment's to name, so a vault line is just an
-// unknown key now; doctor and the no-vault error point at it.
-func TestVaultLineIsUnknown(t *testing.T) {
-	home(t, "vault = \"~/feed\"\n")
-	r, err := Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !slices.Equal(r.Unknown, []string{"vault"}) {
-		t.Errorf("Unknown = %q, want [vault]", r.Unknown)
 	}
 }
 
@@ -90,7 +87,7 @@ func TestLoadNeverWrites(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got := read(t, p); got != "# mine\nvault = \"/v\"\n" {
-		t.Errorf("~/.hrrc = %q, changed by Load", got)
+		t.Errorf(".hrrc = %q, changed by Load", got)
 	}
 }
 
@@ -107,38 +104,78 @@ func TestHome(t *testing.T) {
 	}
 }
 
-// An older hr's ~/.hr/config.toml moves to ~/.hrrc on first use,
-// settings, comments and all.
-func TestLegacyConfigIsAdopted(t *testing.T) {
-	p := home(t, "")
-	body := "# mine\nuser_agent = \"hrb/0.1\"\n"
-	writeFile(t, legacy(), body)
-	r, err := Load()
-	if err != nil {
-		t.Fatal(err)
+// $HR_HOME moves the settings with the state, so one variable isolates
+// a scratch hr completely.
+func TestHRHomeHoldsTheRC(t *testing.T) {
+	home(t, "vault = \"/real\"\n")
+	scratch := t.TempDir()
+	t.Setenv("HR_HOME", scratch)
+	if p, err := Path(); err != nil || p != filepath.Join(scratch, ".hrrc") {
+		t.Errorf("Path() = %q, %v; want $HR_HOME/.hrrc", p, err)
 	}
-	if r.UserAgent != "hrb/0.1" {
-		t.Errorf("UserAgent = %q, want hrb/0.1", r.UserAgent)
-	}
-	if got := read(t, p); got != body {
-		t.Errorf("~/.hrrc = %q, want the old config.toml", got)
-	}
-	if _, err := os.Stat(legacy()); !os.IsNotExist(err) {
-		t.Errorf("config.toml still there: %v", err)
+	if r, err := Load(); err != nil || r.Vault != "" {
+		t.Errorf("Load = %+v, %v; read the real .hrrc", r, err)
 	}
 }
 
-// An existing ~/.hrrc wins, even a dangling link into dotfiles, and the
-// stray config.toml is left for doctor; with $HR_HOME set, its
-// config.toml never moves.
-func TestLegacyConfigNeverOverwrites(t *testing.T) {
-	p := home(t, "user_agent = \"new\"\n")
-	writeFile(t, legacy(), "user_agent = \"old\"\n")
-	if r, err := Load(); err != nil || r.UserAgent != "new" {
-		t.Errorf("Load = %+v, %v; want new", r, err)
+// ~/.hrrc, a regular file or a link into dotfiles, moves into ~/.hr.
+func TestUserHrrcIsAdopted(t *testing.T) {
+	p := home(t, "")
+	body := "# mine\nvault = \"~/feed\"\n"
+	writeFile(t, userHrrc(), body)
+	r, err := Load()
+	if err != nil || r.Vault != "~/feed" {
+		t.Fatalf("Load = %+v, %v; want ~/feed", r, err)
 	}
-	if read(t, legacy()) != "user_agent = \"old\"\n" {
-		t.Error("config.toml changed")
+	if got := read(t, p); got != body || exists(userHrrc()) {
+		t.Errorf(".hrrc = %q, ~/.hrrc left: %v", got, exists(userHrrc()))
+	}
+
+	p = home(t, "")
+	target := filepath.Join(t.TempDir(), "hrrc")
+	writeFile(t, target, body)
+	if err := os.Symlink(target, userHrrc()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.Readlink(p); err != nil || got != target {
+		t.Errorf(".hrrc links to %q, %v; want %q", got, err, target)
+	}
+}
+
+func TestConfigTOMLIsAdopted(t *testing.T) {
+	p := home(t, "")
+	writeFile(t, configTOML(), "vault = \"~/feed\"\n")
+	if r, err := Load(); err != nil || r.Vault != "~/feed" {
+		t.Fatalf("Load = %+v, %v; want ~/feed", r, err)
+	}
+	if !exists(p) || exists(configTOML()) {
+		t.Error("config.toml was not moved to .hrrc")
+	}
+}
+
+// With both legacy files, the newer ~/.hrrc wins and config.toml is
+// left for doctor to report.
+func TestNewerLegacyWins(t *testing.T) {
+	home(t, "")
+	writeFile(t, userHrrc(), "vault = \"/new\"\n")
+	writeFile(t, configTOML(), "vault = \"/old\"\n")
+	if r, err := Load(); err != nil || r.Vault != "/new" {
+		t.Errorf("Load = %+v, %v; want /new", r, err)
+	}
+	if !exists(configTOML()) {
+		t.Error("config.toml vanished")
+	}
+}
+
+// An existing .hrrc, even a dangling link, is never replaced.
+func TestLegacyNeverOverwrites(t *testing.T) {
+	p := home(t, "vault = \"/kept\"\n")
+	writeFile(t, userHrrc(), "vault = \"/old\"\n")
+	if r, err := Load(); err != nil || r.Vault != "/kept" {
+		t.Errorf("Load = %+v, %v; want /kept", r, err)
 	}
 
 	if err := os.Remove(p); err != nil {
@@ -150,18 +187,23 @@ func TestLegacyConfigNeverOverwrites(t *testing.T) {
 	if _, err := Load(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(legacy()); err != nil {
-		t.Errorf("config.toml moved over a dangling ~/.hrrc: %v", err)
+	if !exists(userHrrc()) {
+		t.Error("~/.hrrc moved over a dangling .hrrc")
 	}
+}
 
-	if err := os.Remove(p); err != nil {
-		t.Fatal(err)
+// A scratch $HR_HOME adopts its own config.toml but never takes the
+// user's ~/.hrrc.
+func TestHRHomeNeverTakesUserHrrc(t *testing.T) {
+	home(t, "")
+	writeFile(t, userHrrc(), "vault = \"/user\"\n")
+	scratch := t.TempDir()
+	t.Setenv("HR_HOME", scratch)
+	writeFile(t, filepath.Join(scratch, "config.toml"), "vault = \"/s\"\n")
+	if r, err := Load(); err != nil || r.Vault != "/s" {
+		t.Errorf("Load = %+v, %v; want /s", r, err)
 	}
-	t.Setenv("HR_HOME", filepath.Join(os.Getenv("HOME"), ".hr"))
-	if r, err := Load(); err != nil || r.UserAgent != "" {
-		t.Errorf("Load under HR_HOME = %+v, %v; want empty", r, err)
-	}
-	if _, err := os.Stat(legacy()); err != nil {
-		t.Errorf("config.toml moved under HR_HOME: %v", err)
+	if !exists(userHrrc()) {
+		t.Error("~/.hrrc moved into $HR_HOME")
 	}
 }

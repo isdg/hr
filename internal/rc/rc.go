@@ -1,6 +1,6 @@
-// Package rc locates hr's home, ~/.hr, and reads ~/.hrrc: the user's own
-// defaults for every vault's settings. hr never writes ~/.hrrc, so it can
-// be a link into a dotfiles repo.
+// Package rc locates hr's home, ~/.hr, and reads its .hrrc: the user's
+// default vault and their defaults for every vault's settings. hr never
+// writes .hrrc, so it can be a link into a dotfiles repo.
 package rc
 
 import (
@@ -15,6 +15,7 @@ import (
 )
 
 type RC struct {
+	Vault string `toml:"vault"`
 	config.Settings
 
 	// Unknown lists the keys Load did not recognise, which are ignored.
@@ -22,7 +23,7 @@ type RC struct {
 }
 
 // Home is hr's machine-local directory, outside every vault: $HR_HOME,
-// else ~/.hr. It holds one state directory per vault.
+// else ~/.hr. It holds .hrrc and one state directory per vault.
 func Home() (string, error) {
 	if h := os.Getenv("HR_HOME"); h != "" {
 		return filepath.Abs(h)
@@ -34,45 +35,58 @@ func Home() (string, error) {
 	return filepath.Join(home, ".hr"), nil
 }
 
-// Path returns ~/.hrrc, first moving an older hr's config.toml there.
-// An explicit $HR_HOME never gives its config.toml up.
+// Path returns <home>/.hrrc, first moving an older hr's settings file
+// there when it has none.
 func Path() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("locate home directory: %w", err)
-	}
-	path := filepath.Join(home, ".hrrc")
-	if os.Getenv("HR_HOME") == "" {
-		if err := adoptLegacy(path); err != nil {
-			return "", err
-		}
-	}
-	return path, nil
-}
-
-// LegacyPath is where hr kept these settings, and the default vault,
-// before ~/.hrrc.
-func LegacyPath() (string, error) {
 	home, err := Home()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, "config.toml"), nil
+	path := filepath.Join(home, ".hrrc")
+	if err := adoptLegacy(path); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+// LegacyPaths are where older hr kept these settings, newest first:
+// ~/.hrrc, then <home>/config.toml. ~/.hrrc is never taken into an
+// explicit $HR_HOME, so a scratch home cannot claim the user's file.
+func LegacyPaths() ([]string, error) {
+	home, err := Home()
+	if err != nil {
+		return nil, err
+	}
+	paths := []string{filepath.Join(home, "config.toml")}
+	if os.Getenv("HR_HOME") == "" {
+		user, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("locate home directory: %w", err)
+		}
+		paths = append([]string{filepath.Join(user, ".hrrc")}, paths...)
+	}
+	return paths, nil
 }
 
 func adoptLegacy(path string) error {
-	legacy, err := LegacyPath()
-	if err != nil {
-		return nil
-	}
-	if _, err := os.Stat(legacy); err != nil {
-		return nil
-	}
 	if _, err := os.Lstat(path); err == nil {
 		return nil
 	}
-	if err := os.Rename(legacy, path); err != nil {
-		return fmt.Errorf("move %s to %s: %w", legacy, path, err)
+	legacy, err := LegacyPaths()
+	if err != nil {
+		return err
+	}
+	for _, old := range legacy {
+		if _, err := os.Lstat(old); err != nil {
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return err
+		}
+		if err := os.Rename(old, path); err != nil {
+			return fmt.Errorf("move %s to %s: %w", old, path, err)
+		}
+		return nil
 	}
 	return nil
 }

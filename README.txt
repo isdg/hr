@@ -48,10 +48,11 @@ VAULT LAYOUT
                                                   absent while all
                                                   defaults)
 
-    ~/.hrrc                                       your settings for every
-                                                  vault; hr never writes it
     ~/.hr/ ($HR_HOME)                             this machine's, outside
                                                   every vault
+      .hrrc                                       your default vault and
+                                                  settings for every vault;
+                                                  hr never writes it
       <name>/                                    one per vault, by the
                                                   name in its hr.toml
         cache.json                                ETag / Last-Modified per
@@ -70,9 +71,10 @@ VAULT LAYOUT
 
 Vault names must be unique on a machine: hr init refuses a name whose
 state directory exists. Older hr kept the per-vault state in <vault>/.hr/,
-which moves into ~/.hr on first use, and its settings in
-~/.hr/config.toml, which moves to ~/.hrrc unless $HR_HOME is set. hr doctor
-reports either one it could not move.
+which moves into ~/.hr on first use, and its settings in ~/.hrrc or
+~/.hr/config.toml, which move to ~/.hr/.hrrc when it is missing; a
+scratch $HR_HOME never takes ~/.hrrc. hr doctor reports what could not
+move.
 
 The <id> segment is the first 8 hex chars of sha1(GUID || URL || title), so
 the same item lands on the same path across machines.
@@ -240,12 +242,14 @@ WHICH VAULT DOES HR USE?
 
 Resolved in priority order: -C <dir> flag > walking up from the current
 directory for an hr.toml (like git finds .git, so a cloned vault works as
-soon as you cd into it) > $HR_VAULT, your default for everywhere else.
+soon as you cd into it) > $HR_VAULT > the vault line of ~/.hr/.hrrc, your
+default for everywhere else. hr vault prints the result.
 
-Nothing hr runs changes which vault another process uses: export
-HR_VAULT in your shell's rc, prefix one command (HR_VAULT=~/other hr
-list), or pass -C. Jobs that don't start from your shell, like launchd
-agents or cron, should pass -C. hr init never selects the vault it makes.
+Nothing hr runs changes which vault another process uses: hr never
+writes .hrrc, and hr init never selects the vault it makes. To use
+another vault, prefix one command (HR_VAULT=~/other hr list) or pass
+-C. A scratch hr, like a test, sets $HR_HOME: that moves .hrrc and the
+state together.
 
 hr doctor checks a vault's hr.toml and feed directories for inconsistencies
 (malformed sidecars, orphaned files, tombstone contradictions, id
@@ -256,18 +260,19 @@ YOUR SETTINGS AND THE VAULT'S
 -------------------------------------------------------------------------------
 
 ordering, autoread, showread, user_agent and autocommit can be set in
-~/.hrrc as your defaults for every vault, or in a vault's hr.toml for
-that vault alone. A key the vault sets wins, even when it sets false; a
-key it leaves out keeps your value:
+~/.hr/.hrrc as your defaults for every vault, or in a vault's hr.toml
+for that vault alone. A key the vault sets wins, even when it sets
+false; a key it leaves out keeps your value:
 
-    # ~/.hrrc
+    # ~/.hr/.hrrc
+    vault = "~/feed"
     ordering = "desc"
     user_agent = "hrb/0.1"
 
 In hr.toml they must sit above the first [[feeds]]: TOML gives a key below
-that header to the feed, and hr doctor flags it. hr only reads ~/.hrrc,
+that header to the feed, and hr doctor flags it. hr only reads .hrrc,
 so it can be a link into a dotfiles repo; hr doctor flags a key it
-ignores, such as a vault line left from an older hr.
+ignores.
 
 -------------------------------------------------------------------------------
 STORAGE DESIGN

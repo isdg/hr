@@ -30,5 +30,5 @@ func Execute() {
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&vaultFlag, "vault", "C", "",
 		"vault directory (default: the one holding the current "+
-			"directory, else $HR_VAULT)")
+			"directory, else $HR_VAULT, else .hrrc's vault)")
 }

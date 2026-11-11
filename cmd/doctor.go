@@ -52,33 +52,35 @@ error-level issue was found.`,
 	},
 }
 
-// rcIssues reports what in ~/.hrrc hr ignores, and an older hr's
-// config.toml that could not move there because ~/.hrrc exists.
+// rcIssues reports keys in .hrrc that hr ignores, and an older hr's
+// settings file that could not move to .hrrc because one exists.
 func rcIssues() ([]doctor.Issue, error) {
+	path, err := rc.Path()
+	if err != nil {
+		return nil, err
+	}
 	r, err := rc.Load()
 	if err != nil {
 		return nil, err
 	}
 	var issues []doctor.Issue
 	for _, k := range r.Unknown {
-		msg := fmt.Sprintf("unknown key %q is ignored", k)
-		if k == "vault" {
-			msg = "vault is no longer read: set $HR_VAULT, " +
-				"or cd into the vault"
-		}
 		issues = append(issues, doctor.Issue{
-			Severity: doctor.Warn, Path: "~/.hrrc", Message: msg,
+			Severity: doctor.Warn, Path: path,
+			Message: fmt.Sprintf("unknown key %q is ignored", k),
 		})
 	}
-	legacy, err := rc.LegacyPath()
+	legacy, err := rc.LegacyPaths()
 	if err != nil {
 		return nil, err
 	}
-	if _, err := os.Stat(legacy); err == nil {
-		issues = append(issues, doctor.Issue{
-			Severity: doctor.Warn, Path: legacy,
-			Message: "no longer read: settings live in ~/.hrrc",
-		})
+	for _, old := range legacy {
+		if _, err := os.Lstat(old); err == nil {
+			issues = append(issues, doctor.Issue{
+				Severity: doctor.Warn, Path: old,
+				Message: "no longer read: settings live in " + path,
+			})
+		}
 	}
 	return issues, nil
 }

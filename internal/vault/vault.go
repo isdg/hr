@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -29,7 +28,8 @@ type Vault struct {
 
 // Resolve returns the absolute root of the active vault for operating
 // commands. Priority: explicit (flag) > discovered from the current
-// directory (walking up for hr.toml, like `.git`) > $HR_VAULT.
+// directory (walking up for hr.toml, like `.git`) > $HR_VAULT > the
+// vault line of .hrrc.
 func Resolve(explicit string) (string, error) {
 	raw := explicit
 	if raw == "" {
@@ -43,27 +43,31 @@ func Resolve(explicit string) (string, error) {
 		raw = os.Getenv("HR_VAULT")
 	}
 	if raw == "" {
+		r, err := rc.Load()
+		if err != nil {
+			return "", err
+		}
+		raw = r.Vault
+	}
+	if raw == "" {
 		return "", noVault()
 	}
 	return absExpand(raw)
 }
 
 func noVault() error {
-	msg := "no vault: pass -C <dir>, cd into a vault, or set $HR_VAULT"
+	msg := "no vault: pass -C <dir>, cd into a vault, set $HR_VAULT"
 	path, err := rc.Path()
 	if err != nil {
 		return errors.New(msg)
 	}
-	if r, err := rc.Load(); err == nil && slices.Contains(r.Unknown, "vault") {
-		msg += fmt.Sprintf(" (the vault line of %s is no longer read)", path)
-	}
-	return errors.New(msg)
+	return fmt.Errorf("%s, or add vault = \"<dir>\" to %s", msg, path)
 }
 
 // Discover walks up from dir looking for an hr.toml, the way `git`
 // discovers a repo root from `.git`. It lets a cloned vault work as
-// soon as you `cd` into it (or a subdirectory of it), with no flag or
-// $HR_VAULT needed. Returns the vault root and whether one was found.
+// soon as you `cd` into it (or a subdirectory of it), with nothing
+// configured. Returns the vault root and whether one was found.
 func Discover(dir string) (string, bool) {
 	dir, err := filepath.Abs(dir)
 	if err != nil {
@@ -144,7 +148,8 @@ func Open(root string) (*Vault, error) {
 // machine. The name must be unique among the machine's vaults.
 func StateDir(name string) (string, error) {
 	if name == "" || name == "." || name == ".." ||
-		strings.ContainsAny(name, `/\`) || name == "config.toml" {
+		strings.ContainsAny(name, `/\`) || name == "config.toml" ||
+		name == ".hrrc" {
 		return "", fmt.Errorf("vault name %q cannot name a directory "+
 			"under the hr home", name)
 	}

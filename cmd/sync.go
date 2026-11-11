@@ -45,7 +45,7 @@ var syncCmd = &cobra.Command{
 		}
 		if n := len(cfg.Unknown) + len(r.Unknown); n > 0 {
 			fmt.Fprintf(os.Stderr, "warning: %s in hr.toml or "+
-				"~/.hrrc, "+
+				"~/.hr/.hrrc, "+
 				"ignored (see `hr doctor`)\n", plural(n, "unknown key"))
 		}
 		ua := cfg.UserAgent

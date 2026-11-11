@@ -48,10 +48,14 @@ func realpath(t *testing.T, p string) string {
 }
 
 // Precedence: -C, then the vault holding the current directory, then
-// $HR_VAULT, which is a default and never pulls hr out of a vault.
+// $HR_VAULT, then the vault line of .hrrc. Neither default ever pulls
+// hr out of a vault.
 func TestResolvePrecedence(t *testing.T) {
+	t.Setenv("HR_HOME", t.TempDir())
 	here, env, flag := mkVault(t, "here"), mkVault(t, "env"),
 		mkVault(t, "flag")
+	rcVault := mkVault(t, "rc")
+	writeRC(t, "vault = \""+rcVault+"\"\n")
 	t.Setenv("HR_VAULT", env)
 	t.Chdir(here)
 
@@ -68,6 +72,11 @@ func TestResolvePrecedence(t *testing.T) {
 		t.Errorf("outside: Resolve = %q, %v; want $HR_VAULT %q",
 			got, err, env)
 	}
+	t.Setenv("HR_VAULT", "")
+	if got, err := Resolve(""); err != nil || got != rcVault {
+		t.Errorf("no $HR_VAULT: Resolve = %q, %v; want .hrrc's %q",
+			got, err, rcVault)
+	}
 }
 
 func TestResolveExpandsTilde(t *testing.T) {
@@ -79,24 +88,24 @@ func TestResolveExpandsTilde(t *testing.T) {
 	}
 }
 
-// With no vault anywhere, the error says how to name one, and points at
-// a vault line in the user's rc, which hr no longer reads.
+// With no vault anywhere, the error lists every way to name one,
+// including the .hrrc it would read.
 func TestResolveNoVault(t *testing.T) {
+	t.Setenv("HR_HOME", t.TempDir())
 	t.Setenv("HR_VAULT", "")
-	t.Setenv("HOME", t.TempDir())
 	t.Chdir(t.TempDir())
 	_, err := Resolve("")
-	if err == nil || !strings.Contains(err.Error(), "$HR_VAULT") {
-		t.Fatalf("Resolve error = %v, want one naming $HR_VAULT", err)
+	if err == nil {
+		t.Fatal("Resolve succeeded with no vault anywhere")
 	}
-	if strings.Contains(err.Error(), "no longer read") {
-		t.Errorf("error %q blames an rc that has no vault line", err)
+	p, perr := rc.Path()
+	if perr != nil {
+		t.Fatal(perr)
 	}
-
-	writeRC(t, "vault = \"/v\"\n")
-	_, err = Resolve("")
-	if err == nil || !strings.Contains(err.Error(), "no longer read") {
-		t.Errorf("Resolve error = %v, want one naming the rc", err)
+	for _, want := range []string{"-C", "$HR_VAULT", p} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("Resolve error %q does not name %s", err, want)
+		}
 	}
 }
 
