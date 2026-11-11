@@ -1,8 +1,10 @@
 package bookmark
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -111,5 +113,30 @@ func TestCurrent(t *testing.T) {
 		if got[k] != p {
 			t.Errorf("Current[%v] = %v, want %v", k, got[k], p)
 		}
+	}
+}
+
+// Newest orders the live bookmarks by when they were set, newest first,
+// leaving out cleared ones and superseded positions.
+func TestNewest(t *testing.T) {
+	e := func(id string, at time.Time, line int) Entry {
+		return Entry{At: at, Feed: "f", ID: id,
+			Position: Position{Line: line}}
+	}
+	got := Newest([]Entry{
+		e("a", t0, 1),
+		e("b", t0.Add(time.Minute), 2),
+		e("c", t0.Add(2*time.Minute), 3),
+		e("a", t0.Add(3*time.Minute), 4),
+		e("c", t0.Add(4*time.Minute), 0),
+		e("d", t0.Add(time.Minute), 5), // ties b, later in the log
+	})
+	var ids []string
+	for _, g := range got {
+		ids = append(ids, fmt.Sprintf("%s:%d", g.ID, g.Line))
+	}
+	want := []string{"a:4", "d:5", "b:2"}
+	if !slices.Equal(ids, want) {
+		t.Errorf("Newest = %v, want %v", ids, want)
 	}
 }

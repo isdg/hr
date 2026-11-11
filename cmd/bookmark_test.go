@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/isdg/hr/internal/bookmark"
 	"github.com/isdg/hr/internal/vault"
@@ -62,5 +64,51 @@ func TestBookmarkCommand(t *testing.T) {
 		if err := run(args...); err == nil {
 			t.Errorf("hr bookmark %v succeeded, want an error", args)
 		}
+	}
+}
+
+// --last names the newest live bookmark, and falls back to the one before
+// when its article is gone from the vault.
+func TestLastBookmark(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "vault")
+	write(t, filepath.Join(root, "hr.toml"), "name = \"last\"\n")
+	dir := filepath.Join(root, "feeds", "humans", "matklad")
+	older := filepath.Join(dir, "2024-01-01-a-11111111.md")
+	newer := filepath.Join(dir, "2024-01-02-b-22222222.md")
+	for _, p := range []string{older, newer} {
+		write(t, p, "---\ntitle: \"x\"\nfeed: \"matklad\"\n---\n\nbody\n")
+	}
+	v, err := vault.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out strings.Builder
+	if err := lastBookmark(&out, v); err != nil || out.Len() != 0 {
+		t.Fatalf("no bookmarks: %q, %v; want nothing", out.String(), err)
+	}
+
+	at := time.Now()
+	pos := bookmark.Position{Line: 6, Col: 1}
+	if err := bookmark.Set(v.BookmarksPath(), older, pos, at); err != nil {
+		t.Fatal(err)
+	}
+	pos.Col = 3
+	err = bookmark.Set(v.BookmarksPath(), newer, pos, at.Add(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := lastBookmark(&out, v); err != nil ||
+		out.String() != newer+"\t6:3\n" {
+		t.Errorf("last = %q, %v; want %s at 6:3", out.String(), err, newer)
+	}
+
+	if err := os.Remove(newer); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if err := lastBookmark(&out, v); err != nil ||
+		out.String() != older+"\t6:1\n" {
+		t.Errorf("after delete = %q, %v; want %s at 6:1",
+			out.String(), err, older)
 	}
 }

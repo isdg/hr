@@ -30,6 +30,8 @@ COMMANDS
     hr bookmark <path> [L[:C]]
                               set (or show) the reading place: 1-based
                               line, 0-based byte column; --clear drops it
+    hr bookmark --last        newest bookmark as PATH<TAB>LINE:COL: where
+                              to resume reading
 
 Nvim panel: hr.vim (github.com/isdg/hr.vim), a sidebar with its own
 buffer keys (? lists them).

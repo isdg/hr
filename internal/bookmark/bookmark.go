@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -68,17 +69,37 @@ func Load(path string) ([]Entry, error) {
 // Current maps each bookmarked article to its latest position. The
 // newest entry wins, the later line on a tie, and a clear removes it.
 func Current(entries []Entry) map[history.Key]Position {
-	latest := make(map[history.Key]Entry, len(entries))
-	for _, e := range entries {
-		if prev, ok := latest[e.Key()]; !ok || !e.At.Before(prev.At) {
-			latest[e.Key()] = e
+	out := make(map[history.Key]Position)
+	for _, e := range Newest(entries) {
+		out[e.Key()] = e.Position
+	}
+	return out
+}
+
+// Newest returns each bookmarked article's winning entry (see Current),
+// most recently set first, the later line first on a tie.
+func Newest(entries []Entry) []Entry {
+	win := make(map[history.Key]int, len(entries))
+	for i, e := range entries {
+		if j, ok := win[e.Key()]; !ok || !e.At.Before(entries[j].At) {
+			win[e.Key()] = i
 		}
 	}
-	out := make(map[history.Key]Position, len(latest))
-	for k, e := range latest {
-		if e.Line > 0 {
-			out[k] = e.Position
+	idx := make([]int, 0, len(win))
+	for _, i := range win {
+		if entries[i].Line > 0 {
+			idx = append(idx, i)
 		}
+	}
+	slices.SortFunc(idx, func(a, b int) int {
+		if c := entries[b].At.Compare(entries[a].At); c != 0 {
+			return c
+		}
+		return b - a
+	})
+	out := make([]Entry, len(idx))
+	for n, i := range idx {
+		out[n] = entries[i]
 	}
 	return out
 }
