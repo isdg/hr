@@ -215,6 +215,7 @@ func checkFeedDir(dir, feedName, relDir string, add addFunc) {
 			mdBases[strings.TrimSuffix(name, ".md")] = true
 			checkArticle(dir, name, feedName, rel, idOwners, add)
 
+		case name == vault.AboutFile:
 		default:
 			add(Warn, rel, "unexpected file in feed directory")
 		}

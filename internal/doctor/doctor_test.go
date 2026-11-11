@@ -64,3 +64,23 @@ func TestCheckConfigArchiveNeedsManual(t *testing.T) {
 		t.Errorf("got\n%q\nwant\n%q", got, want)
 	}
 }
+
+func TestCheckFeedDirAboutFile(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{vault.AboutFile, "notes.txt"} {
+		err := os.WriteFile(filepath.Join(dir, name), nil, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	var got []string
+	checkFeedDir(dir, "a", "feeds/a", func(
+		sev Severity, path, format string, args ...any,
+	) {
+		got = append(got, path+": "+fmt.Sprintf(format, args...))
+	})
+	want := []string{"feeds/a/notes.txt: unexpected file in feed directory"}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}

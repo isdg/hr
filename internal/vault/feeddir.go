@@ -22,6 +22,11 @@ import (
 	"strings"
 )
 
+// AboutFile is a feed directory's note on what the feed is and who
+// writes it. It is plain text, so nothing that reads articles (*.md)
+// mistakes it for one.
+const AboutFile = "README.txt"
+
 // FeedLocator maps feed names to their directories from a single
 // snapshot of feeds/. Sync resolves every feed against one locator so
 // concurrent workers neither re-walk the tree nor observe directories
