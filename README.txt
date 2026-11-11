@@ -18,7 +18,8 @@ COMMANDS
     hr mv <feed>... <group>   move feed folders into a group under feeds/
     hr groups                 folders under feeds/ + feed/article/unread
                               counts
-    hr list                   list articles (pretty, --tsv, --json)
+    hr list                   list articles (pretty, --tsv, --json;
+                              --fav, --bookmarked and more filter)
     hr recent                 articles you opened, latest first (takes
                               hr list's flags; --since = opened within)
     hr opened <path>...       record an open (hr.vim runs it on load)
@@ -26,9 +27,12 @@ COMMANDS
     hr unread <path>...
     hr fav <path>...          toggle favorite
     hr alias <path> [name]    local display label (no [name] = clear)
+    hr bookmark <path> [L[:C]]
+                              set (or show) the reading place: 1-based
+                              line, 0-based byte column; --clear drops it
 
-Nvim panel: ~/.dotfiles/nvim/lua/hr/init.lua. <leader>r toggles a sidebar
-with its own buffer keys (<CR>/o/r/u/f/a/R/s/q/?).
+Nvim panel: hr.vim (github.com/isdg/hr.vim), a sidebar with its own
+buffer keys (? lists them).
 
 -------------------------------------------------------------------------------
 VAULT LAYOUT
@@ -59,6 +63,9 @@ VAULT LAYOUT
         history.jsonl                             one line per open, for
                                                   hr recent; NOT
                                                   regenerable
+        bookmarks.jsonl                           one line per reading-
+                                                  place change, latest
+                                                  wins; NOT regenerable
 
 Vault names must be unique on a machine: hr init refuses a name whose
 state directory exists. Older hr kept the per-vault state in <vault>/.hr/
@@ -321,6 +328,7 @@ hr sync is idempotent and never overwrites user-mutable state:
     err.txt                     hr sync (on     —               appended
                                 error)
     history.jsonl               hr opened       —               appended
+    bookmarks.jsonl             hr bookmark     —               appended
 
 Implications:
 
