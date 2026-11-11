@@ -205,3 +205,32 @@ func TestCommitDeletedPath(t *testing.T) {
 		t.Errorf("deletion left uncommitted:\n%s", got)
 	}
 }
+
+func TestUntracked(t *testing.T) {
+	repo := newRepo(t)
+	feeds := filepath.Join(repo, "vault", "feeds")
+	write(t, repo, ".gitignore")
+	err := os.WriteFile(filepath.Join(repo, ".gitignore"),
+		[]byte("*.ignored\n"), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tracked := write(t, feeds, "x/a.meta.toml")
+	git(t, repo, "add", ".")
+	git(t, repo, "commit", "--quiet", "-m", "vault")
+	fresh := write(t, feeds, "x/b[1].meta.toml")
+	write(t, feeds, "x/c.ignored")
+	write(t, repo, "outside.meta.toml")
+	err = os.WriteFile(tracked, []byte("read = true"), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := Untracked(t.Context(), feeds)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{fresh}; !slices.Equal(got, want) {
+		t.Errorf("Untracked = %q, want %q", got, want)
+	}
+}

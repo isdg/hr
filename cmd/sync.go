@@ -111,8 +111,9 @@ func commitSync(cmd *cobra.Command, v *vault.Vault, res *syncer.Result) error {
 	return nil
 }
 
-// changedSidecars returns the vault's tracked sidecars changed or deleted
-// since the last commit, leaving out any the sync itself wrote.
+// changedSidecars returns the vault's sidecars created, changed or deleted
+// since the last commit, except new ones whose article stays uncommitted
+// (written is what this commit adds).
 func changedSidecars(
 	ctx context.Context, v *vault.Vault, written []string,
 ) ([]string, error) {
@@ -120,10 +121,21 @@ func changedSidecars(
 	if err != nil {
 		return nil, err
 	}
+	untracked, err := git.Untracked(ctx, v.FeedsDir())
+	if err != nil {
+		return nil, err
+	}
+	pending := make(map[string]bool, len(untracked))
+	for _, p := range untracked {
+		pending[p] = true
+	}
+	for _, p := range written {
+		delete(pending, p)
+	}
 	var sidecars []string
-	for _, p := range modified {
-		if strings.HasSuffix(p, ".meta.toml") &&
-			!slices.Contains(written, p) {
+	for _, p := range slices.Concat(modified, untracked) {
+		base, ok := strings.CutSuffix(p, ".meta.toml")
+		if ok && !pending[base+".md"] {
 			sidecars = append(sidecars, p)
 		}
 	}

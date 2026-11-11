@@ -45,16 +45,26 @@ func Modified(ctx context.Context, dir string) ([]string, error) {
 	}
 	out, err := run(ctx, dir, nil, "diff", "--name-only", "-z",
 		"--diff-filter=MD", "--relative", "HEAD", "--", ".")
-	if err != nil {
-		return nil, err
-	}
+	return under(dir, out), err
+}
+
+// Untracked returns the files under dir that git neither tracks nor
+// ignores, as absolute paths.
+func Untracked(ctx context.Context, dir string) ([]string, error) {
+	out, err := run(ctx, dir, nil, "ls-files", "-z", "--others",
+		"--exclude-standard", "--", ".")
+	return under(dir, out), err
+}
+
+// under joins NUL-separated paths relative to dir onto it.
+func under(dir string, out []byte) []string {
 	var paths []string
 	for rel := range strings.SplitSeq(string(out), "\x00") {
 		if rel != "" {
 			paths = append(paths, filepath.Join(dir, rel))
 		}
 	}
-	return paths, nil
+	return paths
 }
 
 func hasHead(ctx context.Context, dir string) (bool, error) {

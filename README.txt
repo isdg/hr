@@ -186,9 +186,10 @@ COMMITTING WHAT SYNC FETCHED
 -------------------------------------------------------------------------------
 
 With autocommit = true in hr.toml, hr sync commits the articles it just
-wrote to the git repository holding the vault, along with any
-already-tracked sidecar changed or deleted since the last commit (read
-state, favorites, aliases set by hr read, hr fav, the nvim panel):
+wrote to the git repository holding the vault, along with every sidecar
+created, changed or deleted since the last commit (read state,
+favorites, aliases set by hr read, hr fav, the nvim panel). A new sidecar
+waits while its article itself is uncommitted:
 
     sync: 9 new articles
 
