@@ -48,11 +48,11 @@ VAULT LAYOUT
                                                   absent while all
                                                   defaults)
 
+    ~/.hrrc                                       your settings for every
+                                                  vault; hr never writes it
     ~/.hr/ ($HR_HOME)                             this machine's, outside
                                                   every vault
-      config.toml                                 your settings for every
-                                                  vault
-      <name>/                                     one per vault, by the
+      <name>/                                    one per vault, by the
                                                   name in its hr.toml
         cache.json                                ETag / Last-Modified per
                                                   feed
@@ -69,9 +69,10 @@ VAULT LAYOUT
                                                   wins; NOT regenerable
 
 Vault names must be unique on a machine: hr init refuses a name whose
-state directory exists. Older hr kept the per-vault state in <vault>/.hr/
-and ~/.hrrc; both move into ~/.hr on first use, and hr doctor reports a
-<vault>/.hr/ it could not move.
+state directory exists. Older hr kept the per-vault state in <vault>/.hr/,
+which moves into ~/.hr on first use, and its settings in
+~/.hr/config.toml, which moves to ~/.hrrc unless $HR_HOME is set. hr doctor
+reports either one it could not move.
 
 The <id> segment is the first 8 hex chars of sha1(GUID || URL || title), so
 the same item lands on the same path across machines.
@@ -255,16 +256,18 @@ YOUR SETTINGS AND THE VAULT'S
 -------------------------------------------------------------------------------
 
 ordering, autoread, showread, user_agent and autocommit can be set in
-~/.hr/config.toml as your defaults for every vault, or in a vault's
-hr.toml for that vault alone. A key the vault sets wins, even when it
-sets false; a key it leaves out keeps your value:
+~/.hrrc as your defaults for every vault, or in a vault's hr.toml for
+that vault alone. A key the vault sets wins, even when it sets false; a
+key it leaves out keeps your value:
 
-    # ~/.hr/config.toml
+    # ~/.hrrc
     ordering = "desc"
     user_agent = "hrb/0.1"
 
 In hr.toml they must sit above the first [[feeds]]: TOML gives a key below
-that header to the feed, and hr doctor flags it.
+that header to the feed, and hr doctor flags it. hr only reads ~/.hrrc,
+so it can be a link into a dotfiles repo; hr doctor flags a key it
+ignores, such as a vault line left from an older hr.
 
 -------------------------------------------------------------------------------
 STORAGE DESIGN

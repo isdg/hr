@@ -1,6 +1,6 @@
-// Package rc locates hr's home, ~/.hr, and reads and writes its
-// config.toml: the user's pointer to the active hr vault and their own
-// defaults for every vault's settings.
+// Package rc locates hr's home, ~/.hr, and reads ~/.hrrc: the user's own
+// defaults for every vault's settings. hr never writes ~/.hrrc, so it can
+// be a link into a dotfiles repo.
 package rc
 
 import (
@@ -8,10 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
-	"slices"
-	"strconv"
-	"strings"
 
 	"github.com/BurntSushi/toml"
 
@@ -19,7 +15,6 @@ import (
 )
 
 type RC struct {
-	Vault string `toml:"vault"`
 	config.Settings
 
 	// Unknown lists the keys Load did not recognise, which are ignored.
@@ -27,7 +22,7 @@ type RC struct {
 }
 
 // Home is hr's machine-local directory, outside every vault: $HR_HOME,
-// else ~/.hr. It holds config.toml and one state directory per vault.
+// else ~/.hr. It holds one state directory per vault.
 func Home() (string, error) {
 	if h := os.Getenv("HR_HOME"); h != "" {
 		return filepath.Abs(h)
@@ -39,14 +34,14 @@ func Home() (string, error) {
 	return filepath.Join(home, ".hr"), nil
 }
 
-// Path returns the config file, first moving a legacy ~/.hrrc into
-// place. An explicit $HR_HOME never adopts ~/.hrrc.
+// Path returns ~/.hrrc, first moving an older hr's config.toml there.
+// An explicit $HR_HOME never gives its config.toml up.
 func Path() (string, error) {
-	home, err := Home()
+	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("locate home directory: %w", err)
 	}
-	path := filepath.Join(home, "config.toml")
+	path := filepath.Join(home, ".hrrc")
 	if os.Getenv("HR_HOME") == "" {
 		if err := adoptLegacy(path); err != nil {
 			return "", err
@@ -55,20 +50,26 @@ func Path() (string, error) {
 	return path, nil
 }
 
+// LegacyPath is where hr kept these settings, and the default vault,
+// before ~/.hrrc.
+func LegacyPath() (string, error) {
+	home, err := Home()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, "config.toml"), nil
+}
+
 func adoptLegacy(path string) error {
-	userHome, err := os.UserHomeDir()
+	legacy, err := LegacyPath()
 	if err != nil {
 		return nil
 	}
-	legacy := filepath.Join(userHome, ".hrrc")
 	if _, err := os.Stat(legacy); err != nil {
 		return nil
 	}
-	if _, err := os.Stat(path); err == nil {
+	if _, err := os.Lstat(path); err == nil {
 		return nil
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
 	}
 	if err := os.Rename(legacy, path); err != nil {
 		return fmt.Errorf("move %s to %s: %w", legacy, path, err)
@@ -97,54 +98,4 @@ func Load() (*RC, error) {
 		r.Unknown = append(r.Unknown, k.String())
 	}
 	return &r, nil
-}
-
-var (
-	vaultLine  = regexp.MustCompile(`^\s*vault\s*=`)
-	tableStart = regexp.MustCompile(`^\s*\[`)
-)
-
-// SetVault points the config at vault, or unsets it when vault is "". It
-// edits the text rather than re-encoding the file, so the user's
-// settings and comments survive.
-func SetVault(vault string) error {
-	path, err := Path()
-	if err != nil {
-		return err
-	}
-	data, err := os.ReadFile(path)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	var lines []string
-	if text := strings.TrimSuffix(string(data), "\n"); text != "" {
-		lines = strings.Split(text, "\n")
-	}
-
-	// A top-level key must precede the first table header.
-	top := slices.IndexFunc(lines, tableStart.MatchString)
-	if top < 0 {
-		top = len(lines)
-	}
-	line := "vault = " + strconv.Quote(vault)
-	switch i := slices.IndexFunc(lines[:top], vaultLine.MatchString); {
-	case i >= 0 && vault == "":
-		lines = slices.Delete(lines, i, i+1)
-	case i >= 0:
-		lines[i] = line
-	case vault != "":
-		lines = slices.Insert(lines, top, line)
-	}
-
-	out := strings.Join(lines, "\n")
-	if out != "" {
-		out += "\n"
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	if err := os.WriteFile(path, []byte(out), 0o644); err != nil {
-		return fmt.Errorf("write %s: %w", path, err)
-	}
-	return nil
 }

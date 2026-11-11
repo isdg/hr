@@ -26,7 +26,7 @@ func openActiveVault() (*vault.Vault, *config.Config, error) {
 	return v, cfg, nil
 }
 
-// loadConfig reads the vault's hr.toml over the settings in ~/.hr/config.toml.
+// loadConfig reads the vault's hr.toml over the settings in ~/.hrrc.
 func loadConfig(v *vault.Vault) (*config.Config, *rc.RC, error) {
 	r, err := rc.Load()
 	if err != nil {

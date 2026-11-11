@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -53,7 +54,7 @@ func noVault() error {
 	if err != nil {
 		return errors.New(msg)
 	}
-	if r, err := rc.Load(); err == nil && r.Vault != "" {
+	if r, err := rc.Load(); err == nil && slices.Contains(r.Unknown, "vault") {
 		msg += fmt.Sprintf(" (the vault line of %s is no longer read)", path)
 	}
 	return errors.New(msg)
