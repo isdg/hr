@@ -24,8 +24,8 @@ var importNomCmd = &cobra.Command{
 	Short: "Import historical articles from a nom SQLite database",
 	Long: "Pulls every item from nom's SQLite db into the active hr " +
 		"vault. Existing articles are left untouched; missing " +
-		"articles are written along with their sidecar (read state, " +
-		"favorite). Raw HTML is backfilled into .hr/raw/ for both new " +
+		"articles are written, with a sidecar if nom had them read or " +
+		"favorited. Raw HTML is backfilled into .hr/raw/ for both new " +
 		"and existing articles. Items whose feedurl is not in your " +
 		"hr.toml are skipped (summary at end).",
 	Args: cobra.MaximumNArgs(1),

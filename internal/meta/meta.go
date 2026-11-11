@@ -268,14 +268,3 @@ func RemoveCorruption(articlePath, id string) (bool, error) {
 	m.Corruptions = kept
 	return true, Save(articlePath, m)
 }
-
-func WriteIfAbsent(articlePath string) (bool, error) {
-	_, err := os.Stat(Path(articlePath))
-	if err == nil {
-		return false, nil
-	}
-	if !errors.Is(err, os.ErrNotExist) {
-		return false, err
-	}
-	return true, Save(articlePath, &Meta{})
-}

@@ -379,8 +379,8 @@ func TestFeedIsManual(t *testing.T) {
 	}
 }
 
-// Written lists each new article with its sidecar, and nothing once the
-// items are already on disk; a missing sidecar is backfilled and listed.
+// Written lists each new article, and nothing once the items are already
+// on disk. New articles get no sidecar: their state is all defaults.
 func TestRunWritten(t *testing.T) {
 	srv := testServer(t)
 	defer srv.Close()
@@ -395,37 +395,32 @@ func TestRunWritten(t *testing.T) {
 	}
 	got := res.Written()
 	md, _ := filepath.Glob(filepath.Join(v.FeedsDir(), "alpha", "*.md"))
+	slices.Sort(got)
+	if len(md) != 2 || !slices.Equal(got, md) {
+		t.Errorf("Written = %q, want %q", got, md)
+	}
 	side, _ := filepath.Glob(
 		filepath.Join(v.FeedsDir(), "alpha", "*.meta.toml"))
-	want := append(md, side...)
-	slices.Sort(got)
-	slices.Sort(want)
-	if len(want) != 4 || !slices.Equal(got, want) {
-		t.Errorf("Written = %q, want %q", got, want)
+	if len(side) != 0 {
+		t.Errorf("sync wrote sidecars %q", side)
 	}
 
-	if err := os.Remove(side[0]); err != nil {
-		t.Fatal(err)
-	}
 	res, err = Run(context.Background(),
 		Options{Vault: v, Config: cfg, Force: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := res.Written(); !slices.Equal(got, side[:1]) {
-		t.Errorf("Written on resync = %q, want %q", got, side[:1])
+	if got := res.Written(); len(got) != 0 {
+		t.Errorf("Written on resync = %q, want nothing", got)
 	}
 }
 
 func TestCommitMessage(t *testing.T) {
 	r := &Result{Feeds: []FeedResult{
-		{Name: "lwn", New: 2, Written: make([]string, 4)},
+		{Name: "lwn", New: 2, Written: make([]string, 2)},
 		{Name: "go", New: 0},
-		{Name: "lobsters", New: 5, Written: make([]string, 10)},
-		{Name: "bun", New: 2, Written: make([]string, 4)},
-	}}
-	sidecars := &Result{Feeds: []FeedResult{
-		{Name: "go", Written: make([]string, 3)},
+		{Name: "lobsters", New: 5, Written: make([]string, 5)},
+		{Name: "bun", New: 2, Written: make([]string, 2)},
 	}}
 	tests := []struct {
 		name    string
@@ -440,15 +435,11 @@ func TestCommitMessage(t *testing.T) {
 		{"one article", &Result{Feeds: []FeedResult{
 			{Name: "go", New: 1, Written: make([]string, 2)},
 		}}, 0, "sync: 1 new article\n\ngo  +1"},
-		{"missing sidecars", sidecars, 0,
-			"sync: add 3 missing sidecars"},
 		{"articles and state", r, 2, "sync: 9 new articles\n\n" +
 			"lobsters  +5\n" +
 			"bun       +2\n" +
 			"lwn       +2\n\n" +
 			"update 2 sidecars"},
-		{"missing sidecars and state", sidecars, 1,
-			"sync: add 3 missing sidecars\n\nupdate 1 sidecar"},
 		{"state only", &Result{}, 4, "sync: update 4 sidecars"},
 	}
 	for _, tt := range tests {

@@ -15,9 +15,8 @@ func (r *Result) Written() []string {
 	return paths
 }
 
-// CommitMessage describes a vault commit of the run's writes plus updated
-// pre-existing sidecars (read state and the like). The subject names the
-// first of new articles, missing sidecars, updates that applies.
+// CommitMessage describes a vault commit of the run's new articles plus
+// the updated sidecars (read state and the like) that ride along.
 func (r *Result) CommitMessage(updated int) string {
 	var feeds []FeedResult
 	var total, nameW int
@@ -36,27 +35,18 @@ func (r *Result) CommitMessage(updated int) string {
 	})
 
 	state := "update " + count(updated, "sidecar")
-
-	var subject string
-	var body []string
-	switch written := len(r.Written()); {
-	case total > 0:
-		subject = "sync: " + count(total, "new article")
-		var b strings.Builder
-		for _, fr := range feeds {
-			fmt.Fprintf(&b, "%-*s  +%d\n", nameW, fr.Name, fr.New)
-		}
-		body = append(body, strings.TrimSuffix(b.String(), "\n"))
-	case written > 0:
-		// Only sidecars for articles already on disk were written.
-		subject = "sync: add " + count(written, "missing sidecar")
-	default:
+	if total == 0 {
 		return "sync: " + state
 	}
-	if updated > 0 {
-		body = append(body, state)
+	var b strings.Builder
+	fmt.Fprintf(&b, "sync: %s\n\n", count(total, "new article"))
+	for _, fr := range feeds {
+		fmt.Fprintf(&b, "%-*s  +%d\n", nameW, fr.Name, fr.New)
 	}
-	return strings.Join(append([]string{subject}, body...), "\n\n")
+	if updated > 0 {
+		fmt.Fprintf(&b, "\n%s\n", state)
+	}
+	return strings.TrimSuffix(b.String(), "\n")
 }
 
 func count(n int, noun string) string {
