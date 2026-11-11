@@ -46,3 +46,21 @@ func TestCheckLegacyState(t *testing.T) {
 		t.Error("no warning for a leftover .hr in the vault")
 	}
 }
+
+func TestCheckConfigArchiveNeedsManual(t *testing.T) {
+	cfg := &config.Config{Feeds: []config.Feed{
+		{Name: "done", Tags: []string{"manual", "archive"}},
+		{Name: "polled", URL: "https://x/feed", Tags: []string{"archive"}},
+	}}
+	var got []string
+	checkConfig(cfg, func(sev Severity, _, format string, args ...any) {
+		got = append(got, string(sev)+" "+fmt.Sprintf(format, args...))
+	})
+	want := []string{
+		`warn feed "polled" is tagged "archive" but not "manual", ` +
+			"and only a hand-curated feed can be archived",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("got\n%q\nwant\n%q", got, want)
+	}
+}

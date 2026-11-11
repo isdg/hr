@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"slices"
 	"sort"
@@ -74,7 +75,8 @@ var syncCmd = &cobra.Command{
 		if res == nil {
 			return err
 		}
-		printSyncSummary(res, time.Since(start))
+		printSyncSummary(os.Stdout, newStyler(os.Stdout), res,
+			time.Since(start))
 
 		commit := cfg.AutoCommit
 		if cmd.Flags().Changed("commit") {
@@ -162,7 +164,7 @@ func feedLayout(cfg *config.Config, filter string) (nameW, total int) {
 //	26/61  yandex           +3 new
 //
 // counter dim, name left-padded, status green (+N new) / dim
-// (· up to date) / red (✗ error) / green (· manual).
+// (· up to date, · archived) / red (✗ error) / green (· manual).
 func liveLine(
 	st styler, nameW, counterW, i, total int, fr syncer.FeedResult,
 ) string {
@@ -171,6 +173,8 @@ func liveLine(
 	switch {
 	case fr.Err != nil:
 		status = st.red("✗ error")
+	case fr.Archived:
+		status = st.dim("· archived")
 	case fr.Manual:
 		status = st.green("· manual")
 	case fr.New > 0:
@@ -181,18 +185,20 @@ func liveLine(
 	return fmt.Sprintf("  %s  %-*s  %s", counter, nameW, fr.Name, status)
 }
 
-// printSyncSummary writes the résumé to stdout: a one-line header, only
-// the feeds that gained new items (most first), any errors, and a footer
-// of aggregate counts.
-func printSyncSummary(r *syncer.Result, elapsed time.Duration) {
-	st := newStyler(os.Stdout)
-
+// printSyncSummary writes the résumé to w: a one-line header, only the
+// feeds that gained new items (most first), the manual feeds still due
+// an update, any errors, and a footer of aggregate counts.
+func printSyncSummary(
+	w io.Writer, st styler, r *syncer.Result, elapsed time.Duration,
+) {
 	var changed, errored, manual []syncer.FeedResult
-	var totNew, unchanged, nameW int
+	var totNew, unchanged, archived, nameW int
 	for _, fr := range r.Feeds {
 		switch {
 		case fr.Err != nil:
 			errored = append(errored, fr)
+		case fr.Archived:
+			archived++
 		case fr.Manual:
 			manual = append(manual, fr)
 			if len(fr.Name) > nameW {
@@ -219,13 +225,13 @@ func printSyncSummary(r *syncer.Result, elapsed time.Duration) {
 	if len(r.Feeds) == 1 {
 		feeds = "feed"
 	}
-	fmt.Printf("%s synced %d %s in %s\n",
+	fmt.Fprintf(w, "%s synced %d %s in %s\n",
 		st.bold("✓"), len(r.Feeds), feeds, fmtDur(elapsed))
 
 	if len(changed) > 0 {
-		fmt.Println()
+		fmt.Fprintln(w)
 		for _, fr := range changed {
-			fmt.Printf("  %-*s  %s   %s\n", nameW, fr.Name,
+			fmt.Fprintf(w, "  %-*s  %s   %s\n", nameW, fr.Name,
 				st.green(fmt.Sprintf("+%d", fr.New)),
 				st.dim(fmt.Sprintf("(%d total)", fr.Total)))
 		}
@@ -233,25 +239,25 @@ func printSyncSummary(r *syncer.Result, elapsed time.Duration) {
 	// Hand-curated feeds are never fetched, so say plainly that they only
 	// move when the user updates them.
 	if len(manual) > 0 {
-		fmt.Println()
-		fmt.Printf("  %s update by hand (no feed to poll):\n",
+		fmt.Fprintln(w)
+		fmt.Fprintf(w, "  %s update by hand (no feed to poll):\n",
 			st.green("·"))
 		sort.Slice(manual, func(i, j int) bool {
 			return manual[i].Name < manual[j].Name
 		})
 		for _, fr := range manual {
-			fmt.Printf("    %-*s  %s\n", nameW, fr.Name,
+			fmt.Fprintf(w, "    %-*s  %s\n", nameW, fr.Name,
 				st.dim(fmt.Sprintf("(%d total)", fr.Total)))
 		}
 	}
 	if len(errored) > 0 {
-		fmt.Println()
+		fmt.Fprintln(w)
 		for _, fr := range errored {
-			fmt.Printf("  %s %s: %v\n", st.red("✗"), fr.Name, fr.Err)
+			fmt.Fprintf(w, "  %s %s: %v\n", st.red("✗"), fr.Name, fr.Err)
 		}
 	}
 
-	fmt.Println()
+	fmt.Fprintln(w)
 	errPart := fmt.Sprintf("%d errors", len(errored))
 	if len(errored) > 0 {
 		errPart = st.red(errPart)
@@ -263,7 +269,10 @@ func printSyncSummary(r *syncer.Result, elapsed time.Duration) {
 	if len(manual) > 0 {
 		line += fmt.Sprintf(" · %s manual", plural(len(manual), "feed"))
 	}
-	fmt.Printf("%s · %s\n", line, errPart)
+	if archived > 0 {
+		line += fmt.Sprintf(" · %d archived", archived)
+	}
+	fmt.Fprintf(w, "%s · %s\n", line, errPart)
 }
 
 // fmtDur renders an elapsed duration compactly, e.g. "6.2s".

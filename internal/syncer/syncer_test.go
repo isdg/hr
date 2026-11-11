@@ -379,6 +379,65 @@ func TestFeedIsManual(t *testing.T) {
 	}
 }
 
+// TestFeedIsArchived: archive counts only on a manual feed, with the same
+// lenient tag matching as manual.
+func TestFeedIsArchived(t *testing.T) {
+	cases := []struct {
+		tags []string
+		want bool
+	}{
+		{nil, false},
+		{[]string{"manual"}, false},
+		{[]string{"archive"}, false},
+		{[]string{"manual", "archive"}, true},
+		{[]string{" Archive ", "MANUAL"}, true},
+		{[]string{"manual", "archived"}, false},
+	}
+	for _, c := range cases {
+		if got := (config.Feed{Tags: c.tags}).IsArchived(); got != c.want {
+			t.Errorf("Feed{Tags: %v}.IsArchived() = %v, want %v",
+				c.tags, got, c.want)
+		}
+	}
+}
+
+// TestRunArchivedFeed: an archived feed is reported as manual and
+// archived, still counted, and never fetched; a plain manual feed is
+// not archived.
+func TestRunArchivedFeed(t *testing.T) {
+	v := newVault(t)
+	feeds := []config.Feed{
+		{Name: "done", Group: "humans",
+			Tags: []string{config.TagManual, config.TagArchive}},
+		{Name: "curated", Group: "humans", Tags: []string{config.TagManual}},
+	}
+	dir := filepath.Join(v.FeedsDir(), "humans", "done")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	art := filepath.Join(dir, "1936-01-01-computable-numbers-deadbeef.md")
+	body := []byte("---\ntitle: x\n---\n")
+	if err := os.WriteFile(art, body, 0o644); err != nil {
+		t.Fatalf("write article: %v", err)
+	}
+	res, err := Run(context.Background(), Options{
+		Vault:     v,
+		Config:    &config.Config{Feeds: feeds},
+		UserAgent: "hr-test",
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	done, curated := res.Feeds[0], res.Feeds[1]
+	if !done.Manual || !done.Archived || done.Err != nil || done.Total != 1 {
+		t.Errorf("done = %+v, want manual, archived, no error, Total 1",
+			done)
+	}
+	if !curated.Manual || curated.Archived {
+		t.Errorf("curated = %+v, want manual and not archived", curated)
+	}
+}
+
 // Written lists each new article, and nothing once the items are already
 // on disk. New articles get no sidecar: their state is all defaults.
 func TestRunWritten(t *testing.T) {

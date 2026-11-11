@@ -41,6 +41,11 @@ type Settings struct {
 // trying to fetch them.
 const TagManual = "manual"
 
+// TagArchive marks a hand-curated feed as complete: nothing more will be
+// added, so `hr sync` counts it instead of listing it as due for an
+// update. It only takes effect alongside TagManual.
+const TagArchive = "archive"
+
 type Feed struct {
 	// URL is the feed to poll. Required unless the feed is tagged
 	// TagManual, in which case there is nothing to poll.
@@ -56,15 +61,25 @@ type Feed struct {
 	Group string `toml:"group"`
 }
 
-// IsManual reports whether the feed is hand-curated, i.e. carries the
-// TagManual tag.
-func (f Feed) IsManual() bool {
+// HasTag reports whether the feed carries tag, ignoring case and
+// surrounding whitespace.
+func (f Feed) HasTag(tag string) bool {
 	for _, t := range f.Tags {
-		if strings.EqualFold(strings.TrimSpace(t), TagManual) {
+		if strings.EqualFold(strings.TrimSpace(t), tag) {
 			return true
 		}
 	}
 	return false
+}
+
+// IsManual reports whether the feed is hand-curated, i.e. carries the
+// TagManual tag.
+func (f Feed) IsManual() bool { return f.HasTag(TagManual) }
+
+// IsArchived reports whether the feed is a complete hand-curated one:
+// tagged both TagManual and TagArchive.
+func (f Feed) IsArchived() bool {
+	return f.IsManual() && f.HasTag(TagArchive)
 }
 
 // Load reads the hr.toml at path over base, the user's settings: only

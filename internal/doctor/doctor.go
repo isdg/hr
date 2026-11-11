@@ -154,6 +154,12 @@ func checkConfig(cfg *config.Config, add addFunc) map[string]bool {
 				"feed %q has no url (tag it %q if it is hand-curated)",
 				f.Name, config.TagManual)
 		}
+		if f.HasTag(config.TagArchive) && !f.IsManual() {
+			add(Warn, "hr.toml",
+				"feed %q is tagged %q but not %q, and only a "+
+					"hand-curated feed can be archived",
+				f.Name, config.TagArchive, config.TagManual)
+		}
 		if _, err := vault.CleanGroup(f.Group); err != nil {
 			add(Error, "hr.toml", "feed %q: %v", f.Name, err)
 		}

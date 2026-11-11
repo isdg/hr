@@ -70,7 +70,10 @@ type FeedResult struct {
 	// was fetched: the feed has no URL to poll and only changes when its
 	// articles are updated by hand.
 	Manual bool
-	Err    error
+	// Archived narrows Manual to a feed that is complete
+	// (config.TagArchive): there is nothing left to update by hand.
+	Archived bool
+	Err      error
 }
 
 type Result struct {
@@ -182,6 +185,7 @@ func syncFeed(
 	// it needs updating by hand, and leave the cache entry untouched.
 	if f.IsManual() {
 		fr.Manual = true
+		fr.Archived = f.IsArchived()
 		if dir, err := loc.Dir(f.Name, f.Group); err == nil {
 			fr.Total = countArticles(dir)
 		}

@@ -193,6 +193,20 @@ Declaring them has a second benefit: hr doctor stops reporting the directory
 as "not declared in hr.toml". A url alongside the tag is flagged as
 contradictory, since sync skips the feed either way.
 
+Some hand-curated feeds are finished: an author's collected works, or a site
+that went quiet. Add the archive tag and sync stops listing them as due for
+an update, counting them in the footer instead:
+
+    [[feeds]]
+    name  = "godel"
+    tags  = ["manual", "archive"]
+    group = "humans"
+
+      3 new · 0 feeds unchanged · 1 feed manual · 1 archived · 0 errors
+
+archive only means something on a manual feed; hr doctor warns about one
+without the manual tag.
+
 -------------------------------------------------------------------------------
 COMMITTING WHAT SYNC FETCHED
 -------------------------------------------------------------------------------

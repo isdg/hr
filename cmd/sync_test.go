@@ -1,12 +1,16 @@
 package cmd
 
 import (
+	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/isdg/hr/internal/syncer"
 	"github.com/isdg/hr/internal/vault"
 )
 
@@ -75,5 +79,42 @@ func TestChangedSidecars(t *testing.T) {
 	slices.Sort(want)
 	if !slices.Equal(got, want) {
 		t.Errorf("changedSidecars =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// Archived feeds are counted in the footer but not listed as due for an
+// update by hand; plain manual feeds still are.
+func TestPrintSyncSummaryArchived(t *testing.T) {
+	r := &syncer.Result{Feeds: []syncer.FeedResult{
+		{Name: "alpha", New: 2, Total: 5},
+		{Name: "pg", Manual: true, Total: 18},
+		{Name: "godel", Manual: true, Archived: true, Total: 9},
+		{Name: "turing", Manual: true, Archived: true, Total: 4},
+	}}
+	var buf bytes.Buffer
+	printSyncSummary(&buf, styler{}, r, time.Second)
+	out := buf.String()
+
+	if !strings.Contains(out, "update by hand") ||
+		!strings.Contains(out, "    pg") {
+		t.Errorf("manual feed pg not listed:\n%s", out)
+	}
+	for _, name := range []string{"godel", "turing"} {
+		if strings.Contains(out, name) {
+			t.Errorf("archived feed %s listed:\n%s", name, out)
+		}
+	}
+	footer := "2 new · 0 feeds unchanged · 1 feed manual" +
+		" · 2 archived · 0 errors"
+	if !strings.Contains(out, footer) {
+		t.Errorf("footer missing %q:\n%s", footer, out)
+	}
+}
+
+func TestLiveLineArchived(t *testing.T) {
+	fr := syncer.FeedResult{Name: "godel", Manual: true, Archived: true}
+	if got := liveLine(styler{}, 5, 1, 1, 1, fr); !strings.HasSuffix(
+		got, "godel  · archived") {
+		t.Errorf("liveLine = %q, want it to end with the archived status", got)
 	}
 }
