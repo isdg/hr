@@ -59,6 +59,11 @@ type Feed struct {
 	// location on disk is authoritative and moving it (with `hr mv`,
 	// `mv`, or `git mv`) is what regroups the feed.
 	Group string `toml:"group"`
+
+	// Description says in one line what the feed is, for listings such
+	// as `hr feeds`. A longer note belongs in the feed directory's
+	// README.txt.
+	Description string `toml:"description"`
 }
 
 // HasTag reports whether the feed carries tag, ignoring case and

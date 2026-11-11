@@ -65,3 +65,23 @@ ordering = "asc"
 		t.Errorf("Unknown = %q", cfg.Unknown)
 	}
 }
+
+func TestLoadDescription(t *testing.T) {
+	p := writeConfig(t, `name = "blog"
+
+[[feeds]]
+url  = "https://example.com/feed"
+name = "a"
+description = "Ann on compilers"
+`)
+	cfg, err := Load(p, Settings{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Unknown) > 0 {
+		t.Errorf("Unknown = %q, want none", cfg.Unknown)
+	}
+	if got := cfg.Feeds[0].Description; got != "Ann on compilers" {
+		t.Errorf("Description = %q", got)
+	}
+}
