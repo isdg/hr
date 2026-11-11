@@ -1,16 +1,12 @@
 package cmd
 
 import (
-	"fmt"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/isdg/hr/internal/history"
 	"github.com/isdg/hr/internal/listing"
-	"github.com/isdg/hr/internal/vault"
 )
 
 var recentOpts listFlags
@@ -70,24 +66,9 @@ hr.toml, so an editor can call this from any working directory.`,
 }
 
 func recordOpen(p string, at time.Time) error {
-	abs, err := filepath.Abs(p)
-	if err == nil {
-		abs, err = filepath.EvalSymlinks(abs)
-	}
-	if err != nil {
-		return fmt.Errorf("%s: %w", p, err)
-	}
-	root, ok := vault.Discover(filepath.Dir(abs))
-	if !ok {
-		return fmt.Errorf("%s: not in an hr vault", p)
-	}
-	v, err := vault.Open(root)
+	v, abs, err := articleVault(p)
 	if err != nil {
 		return err
-	}
-	feeds := v.FeedsDir() + string(filepath.Separator)
-	if !strings.HasPrefix(abs, feeds) {
-		return fmt.Errorf("%s: not an article under %s", p, v.FeedsDir())
 	}
 	return history.Record(v.HistoryPath(), abs, at)
 }

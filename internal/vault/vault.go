@@ -249,6 +249,12 @@ func (v *Vault) HistoryPath() string {
 	return filepath.Join(v.MetaDir(), "history.jsonl")
 }
 
+// BookmarksPath is the log of reading places behind `hr bookmark`. Like
+// history it is not regenerable.
+func (v *Vault) BookmarksPath() string {
+	return filepath.Join(v.MetaDir(), "bookmarks.jsonl")
+}
+
 func (v *Vault) CachePath() string {
 	return filepath.Join(v.MetaDir(), "cache.json")
 }
