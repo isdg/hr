@@ -213,3 +213,59 @@ func TestRecentCarriesBookmarks(t *testing.T) {
 		t.Errorf("recent bookmarked = %+v, want hour at line 1", items)
 	}
 }
+
+// Bookmarks orders by when each reading place was set, not publication,
+// leaves cleared ones out, and bounds --since by that time.
+func TestBookmarksOrder(t *testing.T) {
+	v := recentVault(t)
+	all, err := List(v, Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := map[string]history.Key{}
+	for _, it := range all {
+		key[it.Title] = history.KeyFor(it.Feed, it.Path)
+	}
+	now := time.Now()
+	mark := func(title string, ago time.Duration, line int) bookmark.Entry {
+		k := key[title]
+		return bookmark.Entry{At: now.Add(-ago), Feed: k.Feed, ID: k.ID,
+			Position: bookmark.Position{Line: line}}
+	}
+	entries := []bookmark.Entry{
+		mark("hour", 3*day, 1), // newest published, bookmarked first
+		mark("bc", 2*time.Hour, 1),
+		mark("days30", time.Hour, 1),
+		mark("days3", 30*time.Minute, 1),
+		mark("days3", 10*time.Minute, 0), // cleared
+	}
+
+	items, err := Bookmarks(v, Filter{}, entries)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"days30", "bc", "hour"}
+	if got := titles(items); !slices.Equal(got, want) {
+		t.Errorf("bookmarks = %v, want %v", got, want)
+	}
+	for _, it := range items {
+		if it.BookmarkedAt == nil || it.Bookmark == nil {
+			t.Errorf("%s lacks its bookmark or its time", it.Title)
+		}
+	}
+
+	items, err = Bookmarks(v, Filter{Since: day}, entries)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := titles(items); !slices.Equal(got, []string{"days30", "bc"}) {
+		t.Errorf("bookmarked within a day = %v, want [days30 bc]", got)
+	}
+	items, err = Bookmarks(v, Filter{Groups: []string{"books"}}, entries)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := titles(items); !slices.Equal(got, []string{"bc"}) {
+		t.Errorf("bookmarked books = %v, want [bc]", got)
+	}
+}

@@ -37,6 +37,10 @@ type Item struct {
 	// Bookmark is the reading place, from this machine's bookmark log.
 	Bookmark *bookmark.Position `json:"bookmark,omitempty"`
 
+	// BookmarkedAt is when the reading place was set, set only by
+	// Bookmarks, like Opened by Recent.
+	BookmarkedAt *time.Time `json:"bookmarked_at,omitempty"`
+
 	// Opened is the last time the article was opened, set only by
 	// Recent: it comes from the history log, never the listing index.
 	Opened *time.Time `json:"opened,omitempty"`

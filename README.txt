@@ -32,6 +32,9 @@ COMMANDS
                               line, 0-based byte column; --clear drops it
     hr bookmark --last        newest bookmark as PATH<TAB>LINE:COL: where
                               to resume reading
+    hr bookmarks              bookmarked articles, newest bookmark first
+                              (takes hr list's flags; --since = bookmarked
+                              within)
 
 Nvim panel: hr.vim (github.com/isdg/hr.vim), a sidebar with its own
 buffer keys (? lists them).

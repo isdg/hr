@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/isdg/hr/internal/bookmark"
 	"github.com/isdg/hr/internal/history"
 	"github.com/isdg/hr/internal/vault"
 )
@@ -41,6 +42,54 @@ func Recent(v *vault.Vault, f Filter, hist []history.Entry) ([]Item, error) {
 
 	slices.SortFunc(items, func(a, b Item) int {
 		if c := b.Opened.Compare(*a.Opened); c != 0 {
+			return c
+		}
+		return strings.Compare(a.Path, b.Path)
+	})
+	return items, nil
+}
+
+// Bookmarks lists the articles with a reading place matching f, most
+// recently bookmarked first; like Recent, f.Since bounds that time rather
+// than publication, and the times are local.
+func Bookmarks(
+	v *vault.Vault, f Filter, entries []bookmark.Entry,
+) ([]Item, error) {
+	newest := bookmark.Newest(entries)
+	if len(newest) == 0 {
+		return nil, nil
+	}
+	set := make(map[history.Key]bookmark.Entry, len(newest))
+	for _, e := range newest {
+		set[e.Key()] = e
+	}
+	all, err := loadAll(v)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	since := f.Since
+	f.Since = 0
+	var items []Item
+	for _, it := range all {
+		e, ok := set[history.KeyFor(it.Feed, it.Path)]
+		if !ok {
+			continue
+		}
+		pos := e.Position
+		it.Bookmark = &pos
+		if !f.match(it, now) ||
+			(since > 0 && e.At.Before(now.Add(-since))) {
+			continue
+		}
+		local := e.At.Local()
+		it.BookmarkedAt = &local
+		items = append(items, it)
+	}
+
+	slices.SortFunc(items, func(a, b Item) int {
+		if c := b.BookmarkedAt.Compare(*a.BookmarkedAt); c != 0 {
 			return c
 		}
 		return strings.Compare(a.Path, b.Path)
