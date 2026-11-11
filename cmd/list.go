@@ -17,6 +17,7 @@ import (
 type listFlags struct {
 	unread    bool
 	favorite  bool
+	marked    bool
 	feeds     []string
 	groups    []string
 	tag       string
@@ -76,6 +77,8 @@ func (lf *listFlags) register(c *cobra.Command, sinceHelp string) {
 	fl := c.Flags()
 	fl.BoolVar(&lf.unread, "unread", false, "only unread items")
 	fl.BoolVar(&lf.favorite, "fav", false, "only favorite items")
+	fl.BoolVar(&lf.marked, "bookmarked", false,
+		"only items with a reading place (hr bookmark)")
 	fl.StringSliceVar(&lf.feeds, "feed", nil,
 		"filter to a feed (repeatable; exact name match)")
 	fl.StringSliceVar(&lf.groups, "group", nil,
@@ -92,12 +95,13 @@ func (lf *listFlags) register(c *cobra.Command, sinceHelp string) {
 
 func (lf *listFlags) filter() (listing.Filter, error) {
 	f := listing.Filter{
-		Feeds:     lf.feeds,
-		Groups:    lf.groups,
-		Tag:       lf.tag,
-		Unread:    lf.unread,
-		Favorite:  lf.favorite,
-		Corrupted: lf.corrupted,
+		Feeds:      lf.feeds,
+		Groups:     lf.groups,
+		Tag:        lf.tag,
+		Unread:     lf.unread,
+		Favorite:   lf.favorite,
+		Bookmarked: lf.marked,
+		Corrupted:  lf.corrupted,
 	}
 	if lf.since != "" {
 		d, err := listing.ParseSince(lf.since)
@@ -187,9 +191,10 @@ func printPretty(items []listing.Item, date dateFunc) error {
 		if len(feed) > feedW {
 			feed = feed[:feedW]
 		}
-		fmt.Printf("[%s%s%s] %s  %-*s  %s\n",
+		fmt.Printf("[%s%s%s%s] %s  %-*s  %s\n",
 			stateChar(it.Read, "R"),
 			stateChar(it.Favorite, "F"),
+			stateChar(it.Bookmark != nil, "B"),
 			stateChar(it.Corrupt > 0, "C"),
 			date(it),
 			feedW, feed,

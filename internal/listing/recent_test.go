@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/isdg/hr/internal/bookmark"
 	"github.com/isdg/hr/internal/history"
 	"github.com/isdg/hr/internal/vault"
 )
@@ -182,5 +183,33 @@ func TestRecentDoesNotLeakIntoList(t *testing.T) {
 		if it.Opened != nil {
 			t.Errorf("List item %s carries Opened %v", it.Title, it.Opened)
 		}
+	}
+}
+
+// Recent attaches reading places too, so the recent view can resume.
+func TestRecentCarriesBookmarks(t *testing.T) {
+	v := recentVault(t)
+	e := opened(t, v, "hour", time.Minute)
+	all, err := List(v, Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, it := range all {
+		if it.Title != "hour" {
+			continue
+		}
+		pos := bookmark.Position{Line: 1}
+		err := bookmark.Set(v.BookmarksPath(), it.Path, pos, time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	items, err := Recent(v, Filter{Bookmarked: true}, []history.Entry{e})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 || items[0].Bookmark == nil ||
+		items[0].Bookmark.Line != 1 {
+		t.Errorf("recent bookmarked = %+v, want hour at line 1", items)
 	}
 }

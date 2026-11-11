@@ -17,7 +17,7 @@ func Recent(v *vault.Vault, f Filter, hist []history.Entry) ([]Item, error) {
 	if len(latest) == 0 {
 		return nil, nil
 	}
-	all, err := loadAll(v)
+	all, err := loadMarked(v)
 	if err != nil {
 		return nil, err
 	}

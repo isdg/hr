@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/isdg/hr/internal/article"
+	"github.com/isdg/hr/internal/bookmark"
+	"github.com/isdg/hr/internal/history"
 	"github.com/isdg/hr/internal/meta"
 	"github.com/isdg/hr/internal/textfmt"
 	"github.com/isdg/hr/internal/vault"
@@ -31,6 +33,9 @@ type Item struct {
 	Favorite  bool     `json:"favorite"`
 	Tags      []string `json:"tags,omitempty"`
 	Corrupt   int      `json:"corrupt,omitempty"` // count of corruption marks
+
+	// Bookmark is the reading place, from this machine's bookmark log.
+	Bookmark *bookmark.Position `json:"bookmark,omitempty"`
 
 	// Opened is the last time the article was opened, set only by
 	// Recent: it comes from the history log, never the listing index.
@@ -65,17 +70,18 @@ func (it Item) Label() string {
 }
 
 type Filter struct {
-	Feeds     []string // any-of; empty means every feed
-	Groups    []string // any-of; empty means every group
-	Tag       string
-	Unread    bool
-	Favorite  bool
-	Corrupted bool
-	Since     time.Duration
+	Feeds      []string // any-of; empty means every feed
+	Groups     []string // any-of; empty means every group
+	Tag        string
+	Unread     bool
+	Favorite   bool
+	Bookmarked bool
+	Corrupted  bool
+	Since      time.Duration
 }
 
 func List(v *vault.Vault, f Filter) ([]Item, error) {
-	all, err := loadAll(v)
+	all, err := loadMarked(v)
 	if err != nil {
 		return nil, err
 	}
@@ -92,6 +98,28 @@ func List(v *vault.Vault, f Filter) ([]Item, error) {
 		return items[i].Published.After(items[j].Published.Time)
 	})
 	return items, nil
+}
+
+// loadMarked is loadAll with each article's bookmark attached.
+func loadMarked(v *vault.Vault) ([]Item, error) {
+	all, err := loadAll(v)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := bookmark.Load(v.BookmarksPath())
+	if err != nil {
+		return nil, err
+	}
+	marks := bookmark.Current(entries)
+	if len(marks) == 0 {
+		return all, nil
+	}
+	for i := range all {
+		if p, ok := marks[history.KeyFor(all[i].Feed, all[i].Path)]; ok {
+			all[i].Bookmark = &p
+		}
+	}
+	return all, nil
 }
 
 func loadItem(path, group string) (Item, error) {
@@ -139,6 +167,9 @@ func (f Filter) match(it Item, now time.Time) bool {
 		return false
 	}
 	if f.Favorite && !it.Favorite {
+		return false
+	}
+	if f.Bookmarked && it.Bookmark == nil {
 		return false
 	}
 	if f.Corrupted && it.Corrupt == 0 {

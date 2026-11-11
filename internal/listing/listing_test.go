@@ -2,11 +2,14 @@ package listing
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
 	"testing"
+	"time"
 
+	"github.com/isdg/hr/internal/bookmark"
 	"github.com/isdg/hr/internal/vault"
 )
 
@@ -277,5 +280,65 @@ func TestFilterFavorite(t *testing.T) {
 		if !slices.Equal(got, tc.want) {
 			t.Errorf("List(%+v) = %v, want %v", tc.f, got, tc.want)
 		}
+	}
+}
+
+// Listings carry each article's latest reading place from the bookmark
+// log, and --bookmarked keeps only those that have one.
+func TestBookmarks(t *testing.T) {
+	v := testVault(t)
+	all, err := List(v, Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := map[string]string{}
+	for _, it := range all {
+		path[it.Title] = it.Path
+	}
+	at := time.Now()
+	for _, e := range []struct {
+		title string
+		pos   bookmark.Position
+	}{
+		{"nested", bookmark.Position{Line: 6}},
+		{"deep", bookmark.Position{Line: 6, Col: 2}},
+		{"book", bookmark.Position{Line: 6}},
+	} {
+		if err := bookmark.Set(v.BookmarksPath(), path[e.title], e.pos,
+			at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	err = bookmark.Clear(v.BookmarksPath(), path["book"], at.Add(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	items, err := List(v, Filter{Bookmarked: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bookmark.Position{}
+	for _, it := range items {
+		got[it.Title] = *it.Bookmark
+	}
+	want := map[string]bookmark.Position{
+		"nested": {Line: 6},
+		"deep":   {Line: 6, Col: 2},
+	}
+	if !maps.Equal(got, want) {
+		t.Errorf("bookmarked = %v, want %v", got, want)
+	}
+	for _, it := range all {
+		if it.Bookmark != nil {
+			t.Errorf("%s marked before any bookmark was set", it.Title)
+		}
+	}
+	items, err = List(v, Filter{Bookmarked: true, Unread: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := titles(items); !slices.Equal(got, []string{"nested"}) {
+		t.Errorf("bookmarked unread = %v, want [nested]", got)
 	}
 }
