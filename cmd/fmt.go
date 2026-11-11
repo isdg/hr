@@ -18,7 +18,8 @@ var fmtCmd = &cobra.Command{
 	Long: "Walks the vault, rewrites any article frontmatter or " +
 		"sidecar whose string fields contain whitespace issues " +
 		"(embedded newlines, tabs, control chars, leading or " +
-		"trailing whitespace). Body content is preserved as-is.",
+		"trailing whitespace), and removes sidecars that hold only " +
+		"defaults. Body content is preserved as-is.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		v, _, err := openActiveVault()
 		if err != nil {
@@ -63,7 +64,8 @@ var fmtCmd = &cobra.Command{
 		}
 		fmt.Println()
 		fmt.Printf(
-			"scanned %d articles; rewrote %d md + %d sidecar\n",
+			"scanned %d articles; rewrote %d md + %d sidecar "+
+				"(removed if all defaults)\n",
 			scanned, articleChanged, sidecarChanged)
 		return nil
 	},

@@ -1,4 +1,5 @@
-// Package meta reads, writes, and merges sidecar .meta.toml files.
+// Package meta reads, writes, and merges sidecar .meta.toml files. An
+// article whose state is all defaults has no sidecar.
 package meta
 
 import (
@@ -60,8 +61,23 @@ func Load(articlePath string) (*Meta, error) {
 	return &m, nil
 }
 
+// IsZero reports whether m holds only defaults, which no sidecar records.
+func (m *Meta) IsZero() bool {
+	return !m.Read && m.ReadAt == nil && !m.Favorite && len(m.Tags) == 0 &&
+		m.Alias == "" && len(m.Corruptions) == 0
+}
+
+// Save writes m as the article's sidecar, or removes the sidecar when m
+// holds only defaults.
 func Save(articlePath string, m *Meta) error {
 	path := Path(articlePath)
+	if m.IsZero() {
+		err := os.Remove(path)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -140,8 +156,9 @@ func MarkUnread(articlePath string) error {
 	return Save(articlePath, m)
 }
 
-// Fmt re-sanitizes the alias on a sidecar and rewrites if changed.
-// Missing sidecars are no-ops. Returns (changed, error).
+// Fmt re-sanitizes the alias on a sidecar and rewrites if changed, or
+// removes a sidecar holding only defaults. Missing sidecars are no-ops.
+// Returns (changed, error).
 func Fmt(articlePath string) (bool, error) {
 	m, err := Load(articlePath)
 	if err != nil {
@@ -152,7 +169,7 @@ func Fmt(articlePath string) (bool, error) {
 	}
 	orig := m.Alias
 	m.Alias = textfmt.Line(m.Alias)
-	if m.Alias == orig {
+	if m.Alias == orig && !m.IsZero() {
 		return false, nil
 	}
 	return true, Save(articlePath, m)
