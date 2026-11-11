@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/isdg/hr/internal/config"
+	"github.com/isdg/hr/internal/rc"
 )
 
 func TestDiscover(t *testing.T) {
@@ -35,35 +36,89 @@ func TestDiscover(t *testing.T) {
 	}
 }
 
-func TestResolvePrefersDiscoveryOverRC(t *testing.T) {
-	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "hr.toml"), []byte("name = \"t\"\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("HOME", t.TempDir()) // empty ~/.hrrc
-	t.Setenv("HR_VAULT", "")
-
-	oldwd, err := os.Getwd()
+// realpath resolves macOS's /var -> /private/var, which os.Getwd() may
+// or may not report after a Chdir into a TempDir.
+func realpath(t *testing.T, p string) string {
+	t.Helper()
+	r, err := filepath.EvalSymlinks(p)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chdir(oldwd)
-	if err := os.Chdir(root); err != nil {
-		t.Fatal(err)
-	}
+	return r
+}
 
+// Precedence: -C, then the vault holding the current directory, then
+// $HR_VAULT, which is a default and never pulls hr out of a vault.
+func TestResolvePrecedence(t *testing.T) {
+	here, env, flag := mkVault(t, "here"), mkVault(t, "env"),
+		mkVault(t, "flag")
+	t.Setenv("HR_VAULT", env)
+	t.Chdir(here)
+
+	if got, err := Resolve(flag); err != nil || got != flag {
+		t.Errorf("Resolve(flag) = %q, %v; want %q", got, err, flag)
+	}
 	got, err := Resolve("")
+	if err != nil || realpath(t, got) != realpath(t, here) {
+		t.Errorf("inside a vault: Resolve = %q, %v; want %q",
+			got, err, here)
+	}
+	t.Chdir(t.TempDir())
+	if got, err := Resolve(""); err != nil || got != env {
+		t.Errorf("outside: Resolve = %q, %v; want $HR_VAULT %q",
+			got, err, env)
+	}
+}
+
+func TestResolveExpandsTilde(t *testing.T) {
+	t.Setenv("HR_VAULT", "~/feed")
+	t.Chdir(t.TempDir())
+	want := filepath.Join(os.Getenv("HOME"), "feed")
+	if got, err := Resolve(""); err != nil || got != want {
+		t.Errorf("Resolve = %q, %v; want %q", got, err, want)
+	}
+}
+
+// With no vault anywhere, the error says how to name one, and points at
+// a vault line in the user's rc, which hr no longer reads.
+func TestResolveNoVault(t *testing.T) {
+	t.Setenv("HR_VAULT", "")
+	t.Setenv("HOME", t.TempDir())
+	t.Chdir(t.TempDir())
+	_, err := Resolve("")
+	if err == nil || !strings.Contains(err.Error(), "$HR_VAULT") {
+		t.Fatalf("Resolve error = %v, want one naming $HR_VAULT", err)
+	}
+	if strings.Contains(err.Error(), "no longer read") {
+		t.Errorf("error %q blames an rc that has no vault line", err)
+	}
+
+	writeRC(t, "vault = \"/v\"\n")
+	_, err = Resolve("")
+	if err == nil || !strings.Contains(err.Error(), "no longer read") {
+		t.Errorf("Resolve error = %v, want one naming the rc", err)
+	}
+}
+
+func writeRC(t *testing.T, body string) {
+	t.Helper()
+	p, err := rc.Path()
 	if err != nil {
 		t.Fatal(err)
 	}
-	// macOS TempDir roots are under a /var symlink to /private/var;
-	// os.Getwd() resolves it after Chdir, so compare resolved paths.
-	wantReal, err := filepath.EvalSymlinks(root)
-	if err != nil {
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if got != wantReal {
-		t.Fatalf("Resolve() = %q, want %q", got, wantReal)
+	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestResolveNewIgnoresHRVault(t *testing.T) {
+	t.Setenv("HR_VAULT", mkVault(t, "feed"))
+	want := filepath.Join(os.Getenv("HOME"), "blogs", "blog")
+	if got, err := ResolveNew("", "blog"); err != nil || got != want {
+		t.Errorf("ResolveNew = %q, %v; want %q", got, err, want)
 	}
 }
 
@@ -179,5 +234,20 @@ func TestInitRefusesTakenName(t *testing.T) {
 	}
 	if _, err := Init(filepath.Join(t.TempDir(), "b"), "blog"); err == nil {
 		t.Error("second vault named blog shares the first's state")
+	}
+}
+
+func TestInitLeavesHrrcAlone(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HR_HOME", t.TempDir())
+	if _, err := Init(filepath.Join(t.TempDir(), "v"), "blog"); err != nil {
+		t.Fatal(err)
+	}
+	p, err := rc.Path()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(p); !os.IsNotExist(err) {
+		t.Errorf("Init wrote %s: %v", p, err)
 	}
 }

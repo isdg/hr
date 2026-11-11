@@ -11,8 +11,6 @@ COMMANDS
 -------------------------------------------------------------------------------
 
     hr init <name> [dir]      scaffold a vault
-    hr use [dir]              set/show the global default vault
-                              (~/.hr/config.toml)
     hr doctor                 check the vault for inconsistencies
     hr sync                   fetch feeds, write new articles
     hr mv <feed>... <group>   move feed folders into a group under feeds/
@@ -52,10 +50,8 @@ VAULT LAYOUT
 
     ~/.hr/ ($HR_HOME)                             this machine's, outside
                                                   every vault
-      config.toml                                 global default vault:
-                                                  vault = "..." (set/read
-                                                  via hr use), plus your
-                                                  settings for every vault
+      config.toml                                 your settings for every
+                                                  vault
       <name>/                                     one per vault, by the
                                                   name in its hr.toml
         cache.json                                ETag / Last-Modified per
@@ -241,11 +237,14 @@ picked up by the next sync either way.
 WHICH VAULT DOES HR USE?
 -------------------------------------------------------------------------------
 
-Resolved in priority order: -C <dir> flag > $HR_VAULT > walking up from the
-current directory for an hr.toml (like git finds .git, so a cloned vault
-works as soon as you cd into it) > the global default in ~/.hr/config.toml
-(hr use
-<dir> to set it, hr use to show it, hr use --clear to unset it).
+Resolved in priority order: -C <dir> flag > walking up from the current
+directory for an hr.toml (like git finds .git, so a cloned vault works as
+soon as you cd into it) > $HR_VAULT, your default for everywhere else.
+
+Nothing hr runs changes which vault another process uses: export
+HR_VAULT in your shell's rc, prefix one command (HR_VAULT=~/other hr
+list), or pass -C. Jobs that don't start from your shell, like launchd
+agents or cron, should pass -C. hr init never selects the vault it makes.
 
 hr doctor checks a vault's hr.toml and feed directories for inconsistencies
 (malformed sidecars, orphaned files, tombstone contradictions, id
@@ -261,14 +260,11 @@ hr.toml for that vault alone. A key the vault sets wins, even when it
 sets false; a key it leaves out keeps your value:
 
     # ~/.hr/config.toml
-    vault = "~/feed"
     ordering = "desc"
     user_agent = "hrb/0.1"
 
 In hr.toml they must sit above the first [[feeds]]: TOML gives a key below
-that header to the feed, and hr doctor flags it. hr use and hr init change
-only the vault line of ~/.hr/config.toml, so your settings and comments
-are kept.
+that header to the feed, and hr doctor flags it.
 
 -------------------------------------------------------------------------------
 STORAGE DESIGN

@@ -27,13 +27,10 @@ type Vault struct {
 }
 
 // Resolve returns the absolute root of the active vault for operating
-// commands. Priority: explicit (flag) > $HR_VAULT > discovered from the
-// current directory (walking up for hr.toml, like `.git`) > ~/.hr/config.toml.
+// commands. Priority: explicit (flag) > discovered from the current
+// directory (walking up for hr.toml, like `.git`) > $HR_VAULT.
 func Resolve(explicit string) (string, error) {
 	raw := explicit
-	if raw == "" {
-		raw = os.Getenv("HR_VAULT")
-	}
 	if raw == "" {
 		if cwd, err := os.Getwd(); err == nil {
 			if root, ok := Discover(cwd); ok {
@@ -42,24 +39,30 @@ func Resolve(explicit string) (string, error) {
 		}
 	}
 	if raw == "" {
-		r, err := rc.Load()
-		if err != nil {
-			return "", err
-		}
-		raw = r.Vault
+		raw = os.Getenv("HR_VAULT")
 	}
 	if raw == "" {
-		return "", fmt.Errorf(
-			"no vault configured (run `hr init <name>`, " +
-				"or cd into a cloned vault)")
+		return "", noVault()
 	}
 	return absExpand(raw)
 }
 
+func noVault() error {
+	msg := "no vault: pass -C <dir>, cd into a vault, or set $HR_VAULT"
+	path, err := rc.Path()
+	if err != nil {
+		return errors.New(msg)
+	}
+	if r, err := rc.Load(); err == nil && r.Vault != "" {
+		msg += fmt.Sprintf(" (the vault line of %s is no longer read)", path)
+	}
+	return errors.New(msg)
+}
+
 // Discover walks up from dir looking for an hr.toml, the way `git`
 // discovers a repo root from `.git`. It lets a cloned vault work as
-// soon as you `cd` into it (or a subdirectory of it), with no ~/.hr/config.toml
-// or $HR_VAULT needed. Returns the vault root and whether one was found.
+// soon as you `cd` into it (or a subdirectory of it), with no flag or
+// $HR_VAULT needed. Returns the vault root and whether one was found.
 func Discover(dir string) (string, bool) {
 	dir, err := filepath.Abs(dir)
 	if err != nil {
@@ -78,13 +81,10 @@ func Discover(dir string) (string, bool) {
 }
 
 // ResolveNew returns the absolute path for a vault about to be
-// created. Priority: explicit > $HR_VAULT > ~/blogs/<name>. Never
-// reads ~/.hr/config.toml.
+// created: explicit, else ~/blogs/<name>. $HR_VAULT names the vault in
+// use, never a new one.
 func ResolveNew(explicit, name string) (string, error) {
 	raw := explicit
-	if raw == "" {
-		raw = os.Getenv("HR_VAULT")
-	}
 	if raw == "" {
 		raw = "~/blogs/" + name
 	}
@@ -205,11 +205,6 @@ func Init(root, name string) (*Vault, error) {
 	if err != nil {
 		return nil, fmt.Errorf("write config: %w", err)
 	}
-
-	if err := rc.SetVault(v.Root); err != nil {
-		return nil, fmt.Errorf("write hrrc: %w", err)
-	}
-
 	return v, nil
 }
 

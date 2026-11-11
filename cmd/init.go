@@ -42,6 +42,8 @@ var initCmd = &cobra.Command{
 		fmt.Println()
 		fmt.Println(
 			"Edit the config to add feeds, then run `hr sync`.")
+		fmt.Println("hr finds the vault from inside it; " +
+			"elsewhere, set HR_VAULT=" + v.Root)
 		return nil
 	},
 }

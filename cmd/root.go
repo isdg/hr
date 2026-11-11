@@ -29,5 +29,6 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&vaultFlag, "vault", "C", "",
-		"vault directory (default: $HR_VAULT or ~/blogs)")
+		"vault directory (default: the one holding the current "+
+			"directory, else $HR_VAULT)")
 }
