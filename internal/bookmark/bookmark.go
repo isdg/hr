@@ -104,8 +104,10 @@ func Newest(entries []Entry) []Entry {
 	return out
 }
 
-// Set logs p as the reading place in the article at articlePath. The
-// position must exist in the file: a column may sit at the line's end.
+// Set logs p as the reading place in the article at articlePath, which
+// has one at most: setting it again moves it. The position must exist in
+// the file (a column may sit at the line's end); an unchanged one is not
+// logged again.
 func Set(logPath, articlePath string, p Position, at time.Time) error {
 	k, err := history.KeyOf(articlePath)
 	if err != nil {
@@ -114,14 +116,22 @@ func Set(logPath, articlePath string, p Position, at time.Time) error {
 	if err := check(articlePath, p); err != nil {
 		return err
 	}
+	cur, ok, err := current(logPath, k)
+	if err != nil || (ok && cur == p) {
+		return err
+	}
 	return jsonl.Append(logPath,
 		Entry{At: at.UTC(), Feed: k.Feed, ID: k.ID, Position: p})
 }
 
-// Clear logs that the article at articlePath has no reading place.
+// Clear logs that the article at articlePath has no reading place,
+// unless it already has none.
 func Clear(logPath, articlePath string, at time.Time) error {
 	k, err := history.KeyOf(articlePath)
 	if err != nil {
+		return err
+	}
+	if _, ok, err := current(logPath, k); err != nil || !ok {
 		return err
 	}
 	return jsonl.Append(logPath, Entry{At: at.UTC(), Feed: k.Feed, ID: k.ID})
@@ -133,6 +143,10 @@ func Get(logPath, articlePath string) (Position, bool, error) {
 	if err != nil {
 		return Position{}, false, err
 	}
+	return current(logPath, k)
+}
+
+func current(logPath string, k history.Key) (Position, bool, error) {
 	entries, err := Load(logPath)
 	if err != nil {
 		return Position{}, false, err

@@ -140,3 +140,34 @@ func TestNewest(t *testing.T) {
 		t.Errorf("Newest = %v, want %v", ids, want)
 	}
 }
+
+// One bookmark per article: setting the same place again and clearing
+// one that is gone are no-ops, so the log only records real moves.
+func TestSetClearIdempotent(t *testing.T) {
+	md := article(t)
+	log := filepath.Join(t.TempDir(), "bookmarks.jsonl")
+	steps := []func() error{
+		func() error { return Clear(log, md, t0) },
+		func() error { return Set(log, md, Position{Line: 6}, t0) },
+		func() error { return Set(log, md, Position{Line: 6}, t0) },
+		func() error { return Set(log, md, Position{Line: 7}, t0) },
+		func() error { return Clear(log, md, t0) },
+		func() error { return Clear(log, md, t0) },
+	}
+	for i, step := range steps {
+		if err := step(); err != nil {
+			t.Fatalf("step %d: %v", i, err)
+		}
+	}
+	all, err := Load(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lines []int
+	for _, e := range all {
+		lines = append(lines, e.Line)
+	}
+	if want := []int{6, 7, 0}; !slices.Equal(lines, want) {
+		t.Errorf("log lines = %v, want %v", lines, want)
+	}
+}
