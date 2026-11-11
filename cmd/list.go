@@ -16,6 +16,7 @@ import (
 // `hr recent`, so hr.vim and the shell pickers can forward either.
 type listFlags struct {
 	unread    bool
+	favorite  bool
 	feeds     []string
 	groups    []string
 	tag       string
@@ -74,6 +75,7 @@ var feedCmd = &cobra.Command{
 func (lf *listFlags) register(c *cobra.Command, sinceHelp string) {
 	fl := c.Flags()
 	fl.BoolVar(&lf.unread, "unread", false, "only unread items")
+	fl.BoolVar(&lf.favorite, "fav", false, "only favorite items")
 	fl.StringSliceVar(&lf.feeds, "feed", nil,
 		"filter to a feed (repeatable; exact name match)")
 	fl.StringSliceVar(&lf.groups, "group", nil,
@@ -94,6 +96,7 @@ func (lf *listFlags) filter() (listing.Filter, error) {
 		Groups:    lf.groups,
 		Tag:       lf.tag,
 		Unread:    lf.unread,
+		Favorite:  lf.favorite,
 		Corrupted: lf.corrupted,
 	}
 	if lf.since != "" {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/isdg/hr/internal/vault"
@@ -240,5 +241,41 @@ func TestFilterFeedAndGroupIntersect(t *testing.T) {
 	}
 	if len(items) != 0 {
 		t.Errorf("got %+v, want none", items)
+	}
+}
+
+// --fav keeps favorites only and composes with the other filters.
+func TestFilterFavorite(t *testing.T) {
+	v := testVault(t)
+	for rel, title := range map[string]string{
+		"humans/matklad": "nested",
+		"books/plato":    "book",
+	} {
+		name := "2020-01-01-" + title + "-aaaaaaaa.meta.toml"
+		sidecar := filepath.Join(v.FeedsDir(), filepath.FromSlash(rel), name)
+		err := os.WriteFile(sidecar, []byte("favorite = true\n"), 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	cases := []struct {
+		f    Filter
+		want []string
+	}{
+		{Filter{Favorite: true}, []string{"book", "nested"}},
+		{Filter{Favorite: true, Groups: []string{"humans"}},
+			[]string{"nested"}},
+		{Filter{Favorite: true, Feeds: []string{"lobsters"}}, nil},
+	}
+	for _, tc := range cases {
+		items, err := List(v, tc.f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := titles(items)
+		slices.Sort(got)
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("List(%+v) = %v, want %v", tc.f, got, tc.want)
+		}
 	}
 }

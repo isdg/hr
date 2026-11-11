@@ -69,6 +69,7 @@ type Filter struct {
 	Groups    []string // any-of; empty means every group
 	Tag       string
 	Unread    bool
+	Favorite  bool
 	Corrupted bool
 	Since     time.Duration
 }
@@ -135,6 +136,9 @@ func (f Filter) match(it Item, now time.Time) bool {
 		return false
 	}
 	if f.Unread && it.Read {
+		return false
+	}
+	if f.Favorite && !it.Favorite {
 		return false
 	}
 	if f.Corrupted && it.Corrupt == 0 {
