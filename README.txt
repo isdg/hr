@@ -11,6 +11,7 @@ COMMANDS
 -------------------------------------------------------------------------------
 
     hr init <name> [dir]      scaffold a vault
+    hr vault                  print the vault hr would use here
     hr doctor                 check the vault for inconsistencies
     hr sync                   fetch feeds, write new articles
     hr mv <feed>... <group>   move feed folders into a group under feeds/
