@@ -17,6 +17,8 @@ COMMANDS
     hr mv <feed>... <group>   move feed folders into a group under feeds/
     hr groups                 folders under feeds/ + feed/article/unread
                               counts
+    hr feeds                  feeds in hr.toml + group, counts and
+                              description (--group, --json)
     hr list                   list articles (pretty, --tsv, --json;
                               --fav, --bookmarked and more filter)
     hr recent                 articles you opened, latest first (takes
@@ -164,6 +166,28 @@ Once the directory exists, its location on disk wins over group.
 
 ~/.hr/<name>/raw/<feed>/ stays flat, keyed by feed name — it's a local
 cache, so moving a feed never has to touch it.
+
+-------------------------------------------------------------------------------
+DESCRIBING A FEED
+-------------------------------------------------------------------------------
+
+description in hr.toml says in one line what a feed is, and hr feeds lists
+it beside the feed's group and counts:
+
+    [[feeds]]
+    url         = "https://www.interfluidity.com/feed"
+    name        = "waldman"
+    group       = "humans"
+    description = "Steve Randy Waldman on money, finance and politics"
+
+    > hr feeds --group humans
+    FEED     GROUP   ARTICLES  UNREAD  DESCRIPTION
+    waldman  humans       488     488  Steve Randy Waldman on money, ...
+
+A longer note (who writes it, where to start) goes in README.txt in the
+feed's folder. Being plain text, it is never taken for an article, and it
+moves with the folder under hr mv. hr doctor accepts it, and hr feeds --json
+gives its path as "about".
 
 -------------------------------------------------------------------------------
 HAND-CURATED FEEDS
