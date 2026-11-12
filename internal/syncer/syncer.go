@@ -65,6 +65,8 @@ type FeedResult struct {
 	// Written lists the articles this sync created. A feed that errored
 	// part-way still reports what it wrote before failing.
 	Written []string
+	// Titles holds the title of each article in Written, in order.
+	Titles []string
 
 	// Manual is set for a hand-curated feed (config.TagManual). Nothing
 	// was fetched: the feed has no URL to poll and only changes when its
@@ -231,6 +233,7 @@ func syncFeed(
 		if written {
 			fr.New++
 			fr.Written = append(fr.Written, path)
+			fr.Titles = append(fr.Titles, a.Title)
 		} else {
 			fr.Existing++
 		}

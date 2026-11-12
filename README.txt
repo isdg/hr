@@ -241,7 +241,7 @@ created, changed or deleted since the last commit (read state,
 favorites, aliases set by hr read, hr fav, the nvim panel). A new sidecar
 waits while its article itself is uncommitted:
 
-    sync: 9 new articles
+    sync: 9 new: Let's write a PostScript interpreter
 
     lobsters  +5
     bun       +2
@@ -249,8 +249,9 @@ waits while its article itself is uncommitted:
 
     update 3 sidecars
 
-With no new articles, only changed sidecars, the commit is
-"sync: update 3 sidecars".
+The subject carries the first new title of the busiest feed, cut with an
+ellipsis to git's customary 50 characters. With no new articles, only
+changed sidecars, the commit is "sync: update 3 sidecars".
 
 Only those files go in. Anything else you have staged or modified, edited
 article bodies included, is left alone, and nothing is pushed.

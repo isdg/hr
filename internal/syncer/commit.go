@@ -38,8 +38,14 @@ func (r *Result) CommitMessage(updated int) string {
 	if total == 0 {
 		return "sync: " + state
 	}
+	// A title tells hourly syncs apart in a log; the count alone repeats.
+	subject := "sync: " + count(total, "new article")
+	if titles := feeds[0].Titles; len(titles) > 0 {
+		title := strings.Join(strings.Fields(titles[0]), " ")
+		subject = fit(fmt.Sprintf("sync: %d new: %s", total, title))
+	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "sync: %s\n\n", count(total, "new article"))
+	fmt.Fprintf(&b, "%s\n\n", subject)
 	for _, fr := range feeds {
 		fmt.Fprintf(&b, "%-*s  +%d\n", nameW, fr.Name, fr.New)
 	}
@@ -47,6 +53,19 @@ func (r *Result) CommitMessage(updated int) string {
 		fmt.Fprintf(&b, "\n%s\n", state)
 	}
 	return strings.TrimSuffix(b.String(), "\n")
+}
+
+// maxSubject is git's customary subject limit, which commit-msg hooks
+// commonly enforce, in characters.
+const maxSubject = 50
+
+// fit cuts s to maxSubject characters, marking the cut with an ellipsis.
+func fit(s string) string {
+	r := []rune(s)
+	if len(r) <= maxSubject {
+		return s
+	}
+	return strings.TrimRight(string(r[:maxSubject-1]), " ") + "…"
 }
 
 func count(n int, noun string) string {

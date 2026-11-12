@@ -8,7 +8,9 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/isdg/hr/internal/cache"
 	"github.com/isdg/hr/internal/config"
@@ -458,6 +460,10 @@ func TestRunWritten(t *testing.T) {
 	if len(md) != 2 || !slices.Equal(got, md) {
 		t.Errorf("Written = %q, want %q", got, md)
 	}
+	titles := res.Feeds[0].Titles
+	if want := []string{"First ok", "Second ok"}; !slices.Equal(titles, want) {
+		t.Errorf("Titles = %q, want %q", titles, want)
+	}
 	side, _ := filepath.Glob(
 		filepath.Join(v.FeedsDir(), "alpha", "*.meta.toml"))
 	if len(side) != 0 {
@@ -500,6 +506,23 @@ func TestCommitMessage(t *testing.T) {
 			"lwn       +2\n\n" +
 			"update 2 sidecars"},
 		{"state only", &Result{}, 4, "sync: update 4 sidecars"},
+		{"titled", &Result{Feeds: []FeedResult{
+			{Name: "lwn", New: 1, Titles: []string{"Kernel news"}},
+			{Name: "lobsters", New: 2, Titles: []string{
+				"Let's write a PostScript interpreter", "Other",
+			}},
+		}}, 0, "sync: 3 new: Let's write a PostScript interpreter\n\n" +
+			"lobsters  +2\n" +
+			"lwn       +1"},
+		{"long title", &Result{Feeds: []FeedResult{
+			{Name: "lwn", New: 1, Titles: []string{
+				"Secure exclaves and ambient sensing on the next devices",
+			}},
+		}}, 0, "sync: 1 new: Secure exclaves and ambient sensing…\n\n" +
+			"lwn  +1"},
+		{"multi-line title", &Result{Feeds: []FeedResult{
+			{Name: "lwn", New: 1, Titles: []string{"Two\n  lines\t"}},
+		}}, 0, "sync: 1 new: Two lines\n\nlwn  +1"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -507,5 +530,24 @@ func TestCommitMessage(t *testing.T) {
 				t.Errorf("got\n%s\nwant\n%s", got, tt.want)
 			}
 		})
+	}
+}
+
+// A cut title counts characters, not bytes, and never splits one.
+func TestCommitSubjectFits(t *testing.T) {
+	for _, title := range []string{
+		strings.Repeat("ж", 80),
+		strings.Repeat("語", 80),
+		strings.Repeat("a", 37),
+	} {
+		r := &Result{Feeds: []FeedResult{
+			{Name: "x", New: 1, Titles: []string{title}},
+		}}
+		subject, _, _ := strings.Cut(r.CommitMessage(0), "\n")
+		n := utf8.RuneCountInString(subject)
+		if n > maxSubject || !utf8.ValidString(subject) {
+			t.Errorf("subject %q: %d characters, valid %v",
+				subject, n, utf8.ValidString(subject))
+		}
 	}
 }
